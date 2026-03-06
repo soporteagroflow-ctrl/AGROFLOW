@@ -67,9 +67,15 @@ export const getFinanceSummary = () => api.get('/finances/summary');
 // Dashboard
 export const getDashboard = () => api.get('/dashboard');
 
-// AI
-export const getAIPrediction = (promptType: string, context?: any) =>
-  api.post('/ai/predict', { prompt_type: promptType, context: context || {} });
+// Alerts (rule-based, no AI)
+export const getAlerts = () => api.get('/alerts');
+
+// NDVI / Satellite
+export const getNDVIData = () => api.get('/ndvi');
+
+// Offline Sync
+export const syncOfflineData = (operations: any[]) =>
+  api.post('/sync', { operations });
 
 // Seed
 export const seedData = () => api.post('/seed');

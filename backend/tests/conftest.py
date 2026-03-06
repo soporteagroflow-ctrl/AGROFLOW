@@ -12,8 +12,8 @@ def base_url():
 
 @pytest.fixture(scope="session")
 def session_token():
-    """Test session token from MongoDB"""
-    return "test_session_1772785918320"
+    """Test session token from MongoDB - iteration 2"""
+    return "test_session_v2_1772786924"
 
 @pytest.fixture(scope="session")
 def api_client(session_token):

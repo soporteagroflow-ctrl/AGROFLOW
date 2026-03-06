@@ -19,8 +19,7 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-# Emergent LLM Key
-EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
+# AI disabled per user request - zero cost
 
 # Configure logging early
 logging.basicConfig(
@@ -58,6 +57,9 @@ class AnimalCreate(BaseModel):
     notes: str = ""
     mother_id: str = ""
     father_id: str = ""
+    expected_calving_date: str = ""
+    last_breeding_date: str = ""
+    last_vaccination_date: str = ""
 
 class AnimalOut(BaseModel):
     animal_id: str
@@ -134,10 +136,6 @@ class FinanceOut(BaseModel):
     date: str = ""
     animal_id: str = ""
     created_at: str = ""
-
-class AIRequest(BaseModel):
-    prompt_type: str  # prediccion_peso, alerta_sanitaria, rotacion_potrero, general
-    context: dict = {}
 
 class UserUpdate(BaseModel):
     farm_name: str = ""
@@ -562,70 +560,267 @@ async def get_dashboard(user: dict = Depends(get_current_user)):
         "recent_health": recent_health
     }
 
-# --- AI Predictions ---
+# --- Smart Alerts (Rule-based, NO AI, zero cost) ---
 
-@api_router.post("/ai/predict")
-async def ai_predict(data: AIRequest, user: dict = Depends(get_current_user)):
-    try:
-        from emergentintegrations.llm.chat import LlmChat, UserMessage
-        
-        uid = user["user_id"]
-        context_text = ""
-        
-        if data.prompt_type == "prediccion_peso":
-            animals = await db.animals.find(
-                {"user_id": uid, "status": "activo"}, {"_id": 0}
-            ).to_list(100)
-            context_text = f"Tengo {len(animals)} animales activos. "
-            if animals:
-                breeds = set(a.get("breed", "") for a in animals if a.get("breed"))
-                weights = [a.get("weight", 0) for a in animals if a.get("weight", 0) > 0]
-                context_text += f"Razas: {', '.join(breeds)}. "
-                if weights:
-                    context_text += f"Peso promedio actual: {sum(weights)/len(weights):.1f} kg. "
-                    context_text += f"Peso mínimo: {min(weights)} kg. Peso máximo: {max(weights)} kg. "
-            prompt = f"Como experto ganadero, analiza estos datos y predice el crecimiento esperado: {context_text}"
-        
-        elif data.prompt_type == "alerta_sanitaria":
-            health = await db.health_records.find(
-                {"user_id": uid}, {"_id": 0}
-            ).sort("date", -1).to_list(50)
-            context_text = f"Registros sanitarios recientes: {len(health)}. "
-            for h in health[:10]:
-                context_text += f"- {h.get('record_type')}: {h.get('description')} ({h.get('date')}). "
-            prompt = f"Como veterinario experto, analiza estos registros sanitarios y genera alertas: {context_text}"
-        
-        elif data.prompt_type == "rotacion_potrero":
-            paddocks = await db.paddocks.find(
-                {"user_id": uid}, {"_id": 0}
-            ).to_list(50)
-            for p in paddocks:
-                count = await db.animals.count_documents(
-                    {"paddock_id": p["paddock_id"], "user_id": uid, "status": "activo"}
-                )
-                p["animal_count"] = count
-            context_text = f"Tengo {len(paddocks)} potreros. "
-            for p in paddocks:
-                context_text += f"- {p.get('name')}: {p.get('area_hectares')} ha, estado pasto: {p.get('grass_status')}, capacidad: {p.get('capacity')}, animales actuales: {p.get('animal_count')}. "
-            prompt = f"Como experto en manejo de pasturas, recomienda un plan de rotación: {context_text}"
-        
+@api_router.get("/alerts")
+async def get_alerts(user: dict = Depends(get_current_user)):
+    uid = user["user_id"]
+    alerts = []
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today_dt = datetime.now(timezone.utc)
+
+    # 1. Vaccination pending (last vaccine > 180 days)
+    animals = await db.animals.find(
+        {"user_id": uid, "status": "activo"}, {"_id": 0}
+    ).to_list(10000)
+
+    for a in animals:
+        last_vac = a.get("last_vaccination_date", "")
+        if last_vac:
+            try:
+                vac_dt = datetime.fromisoformat(last_vac).replace(tzinfo=timezone.utc)
+                days_since = (today_dt - vac_dt).days
+                if days_since > 180:
+                    alerts.append({
+                        "alert_id": f"vac_{a['animal_id']}",
+                        "type": "vacunacion_pendiente",
+                        "severity": "alta" if days_since > 365 else "media",
+                        "title": f"Vacunación pendiente: {a['name']}",
+                        "description": f"Última vacuna hace {days_since} días (#{a.get('tag_id', '')})",
+                        "animal_id": a["animal_id"],
+                        "animal_name": a["name"],
+                        "date": today,
+                    })
+            except (ValueError, TypeError):
+                pass
         else:
-            prompt = data.context.get("question", "Dame un análisis general de mi finca ganadera.")
-        
-        chat = LlmChat(
-            api_key=EMERGENT_LLM_KEY,
-            session_id=f"ai_{uid}_{data.prompt_type}",
-            system_message="Eres un experto asesor ganadero y veterinario. Responde siempre en español de forma clara y práctica. Usa emojis relevantes para hacer la información más visual. Estructura tu respuesta con títulos y viñetas."
+            # Check health records for last vaccine
+            last_vac_rec = await db.health_records.find_one(
+                {"animal_id": a["animal_id"], "user_id": uid, "record_type": "vacuna"},
+                {"_id": 0}, sort=[("date", -1)]
+            )
+            if last_vac_rec:
+                try:
+                    vac_dt = datetime.fromisoformat(last_vac_rec["date"]).replace(tzinfo=timezone.utc)
+                    days_since = (today_dt - vac_dt).days
+                    if days_since > 180:
+                        alerts.append({
+                            "alert_id": f"vac_{a['animal_id']}",
+                            "type": "vacunacion_pendiente",
+                            "severity": "alta" if days_since > 365 else "media",
+                            "title": f"Vacunación pendiente: {a['name']}",
+                            "description": f"Última vacuna hace {days_since} días",
+                            "animal_id": a["animal_id"],
+                            "animal_name": a["name"],
+                            "date": today,
+                        })
+                except (ValueError, TypeError):
+                    pass
+
+    # 2. Expected calving within 30 days
+    for a in animals:
+        calving = a.get("expected_calving_date", "")
+        if calving:
+            try:
+                calv_dt = datetime.fromisoformat(calving).replace(tzinfo=timezone.utc)
+                days_until = (calv_dt - today_dt).days
+                if 0 <= days_until <= 30:
+                    alerts.append({
+                        "alert_id": f"parto_{a['animal_id']}",
+                        "type": "parto_proximo",
+                        "severity": "alta" if days_until <= 7 else "media",
+                        "title": f"Parto próximo: {a['name']}",
+                        "description": f"Parto esperado en {days_until} días ({calving})",
+                        "animal_id": a["animal_id"],
+                        "animal_name": a["name"],
+                        "date": calving,
+                    })
+                elif days_until < 0 and days_until >= -14:
+                    alerts.append({
+                        "alert_id": f"parto_atrasado_{a['animal_id']}",
+                        "type": "parto_proximo",
+                        "severity": "alta",
+                        "title": f"¡Parto atrasado!: {a['name']}",
+                        "description": f"Fecha esperada fue {calving} ({abs(days_until)} días atrás)",
+                        "animal_id": a["animal_id"],
+                        "animal_name": a["name"],
+                        "date": calving,
+                    })
+            except (ValueError, TypeError):
+                pass
+
+    # 3. Paddock overcrowded
+    paddocks = await db.paddocks.find({"user_id": uid}, {"_id": 0}).to_list(100)
+    for p in paddocks:
+        count = await db.animals.count_documents(
+            {"paddock_id": p["paddock_id"], "user_id": uid, "status": "activo"}
         )
-        chat.with_model("openai", "gpt-4o-mini")
-        
-        user_msg = UserMessage(text=prompt)
-        response = await chat.send_message(user_msg)
-        
-        return {"prediction": response, "type": data.prompt_type}
-    except Exception as e:
-        logger.error(f"AI prediction error: {e}")
-        return {"prediction": f"Error al generar predicción: {str(e)}", "type": data.prompt_type}
+        cap = p.get("capacity", 0)
+        if cap > 0 and count > cap:
+            alerts.append({
+                "alert_id": f"saturado_{p['paddock_id']}",
+                "type": "potrero_saturado",
+                "severity": "alta",
+                "title": f"Potrero saturado: {p['name']}",
+                "description": f"{count} animales / capacidad {cap}",
+                "paddock_id": p["paddock_id"],
+                "date": today,
+            })
+
+    # 4. Bad grass status
+    for p in paddocks:
+        if p.get("grass_status") == "malo":
+            alerts.append({
+                "alert_id": f"pasto_{p['paddock_id']}",
+                "type": "pasto_deteriorado",
+                "severity": "media",
+                "title": f"Pasto deteriorado: {p['name']}",
+                "description": f"El pasto en {p['name']} necesita atención ({p.get('grass_type', '')})",
+                "paddock_id": p["paddock_id"],
+                "date": today,
+            })
+
+    # 5. No health check in > 90 days
+    for a in animals:
+        last_health = await db.health_records.find_one(
+            {"animal_id": a["animal_id"], "user_id": uid},
+            {"_id": 0}, sort=[("date", -1)]
+        )
+        if last_health:
+            try:
+                h_dt = datetime.fromisoformat(last_health["date"]).replace(tzinfo=timezone.utc)
+                days_since = (today_dt - h_dt).days
+                if days_since > 90:
+                    alerts.append({
+                        "alert_id": f"revision_{a['animal_id']}",
+                        "type": "revision_pendiente",
+                        "severity": "baja",
+                        "title": f"Revisión pendiente: {a['name']}",
+                        "description": f"Sin revisión hace {days_since} días",
+                        "animal_id": a["animal_id"],
+                        "animal_name": a["name"],
+                        "date": today,
+                    })
+            except (ValueError, TypeError):
+                pass
+
+    # Sort by severity
+    severity_order = {"alta": 0, "media": 1, "baja": 2}
+    alerts.sort(key=lambda x: severity_order.get(x.get("severity", "baja"), 3))
+
+    return {"alerts": alerts, "count": len(alerts)}
+
+
+# --- NDVI / Paddock Health Data ---
+
+@api_router.get("/ndvi")
+async def get_ndvi_data(user: dict = Depends(get_current_user)):
+    uid = user["user_id"]
+    paddocks = await db.paddocks.find({"user_id": uid}, {"_id": 0}).to_list(100)
+
+    ndvi_data = []
+    for p in paddocks:
+        count = await db.animals.count_documents(
+            {"paddock_id": p["paddock_id"], "user_id": uid, "status": "activo"}
+        )
+        grass = p.get("grass_status", "bueno")
+        # Simulate NDVI value based on grass status
+        ndvi_value = {"bueno": 0.75, "regular": 0.45, "malo": 0.2}.get(grass, 0.5)
+        # Capacity usage
+        cap = p.get("capacity", 0)
+        usage = (count / cap * 100) if cap > 0 else 0
+
+        ndvi_data.append({
+            "paddock_id": p["paddock_id"],
+            "name": p["name"],
+            "center_lat": p.get("center_lat", 0),
+            "center_lng": p.get("center_lng", 0),
+            "area_hectares": p.get("area_hectares", 0),
+            "grass_status": grass,
+            "grass_type": p.get("grass_type", ""),
+            "ndvi_value": ndvi_value,
+            "animal_count": count,
+            "capacity": cap,
+            "usage_percent": round(usage, 1),
+            "status": p.get("status", "activo"),
+            "recommendation": _get_ndvi_recommendation(grass, usage, p.get("status", "")),
+        })
+
+    return {"paddocks": ndvi_data, "total": len(ndvi_data)}
+
+
+def _get_ndvi_recommendation(grass: str, usage: float, status: str) -> str:
+    if grass == "malo":
+        return "Retirar ganado y dejar en descanso mínimo 30 días"
+    if usage > 100:
+        return "Potrero saturado - mover animales a otro potrero"
+    if grass == "regular" and usage > 70:
+        return "Reducir carga animal o considerar rotación"
+    if status == "en_descanso":
+        return "En periodo de descanso - monitorear recuperación"
+    if grass == "bueno" and usage < 50:
+        return "Buen estado - puede recibir más animales"
+    return "Estado óptimo"
+
+
+# --- Offline Sync ---
+
+@api_router.post("/sync")
+async def sync_offline_data(request: Request, user: dict = Depends(get_current_user)):
+    body = await request.json()
+    uid = user["user_id"]
+    results = {"created": 0, "errors": []}
+
+    operations = body.get("operations", [])
+    for op in operations:
+        try:
+            op_type = op.get("type")  # create_animal, create_paddock, create_finance, etc.
+            data = op.get("data", {})
+
+            if op_type == "create_animal":
+                animal = {
+                    "animal_id": f"animal_{uuid.uuid4().hex[:12]}",
+                    "user_id": uid,
+                    **data,
+                    "created_at": datetime.now(timezone.utc).isoformat()
+                }
+                await db.animals.insert_one(animal)
+                results["created"] += 1
+
+            elif op_type == "create_paddock":
+                paddock = {
+                    "paddock_id": f"paddock_{uuid.uuid4().hex[:12]}",
+                    "user_id": uid,
+                    **data,
+                    "created_at": datetime.now(timezone.utc).isoformat()
+                }
+                await db.paddocks.insert_one(paddock)
+                results["created"] += 1
+
+            elif op_type == "create_finance":
+                finance = {
+                    "finance_id": f"fin_{uuid.uuid4().hex[:12]}",
+                    "user_id": uid,
+                    **data,
+                    "created_at": datetime.now(timezone.utc).isoformat()
+                }
+                await db.finances.insert_one(finance)
+                results["created"] += 1
+
+            elif op_type == "create_health":
+                record = {
+                    "record_id": f"health_{uuid.uuid4().hex[:12]}",
+                    "user_id": uid,
+                    **data,
+                    "created_at": datetime.now(timezone.utc).isoformat()
+                }
+                await db.health_records.insert_one(record)
+                results["created"] += 1
+
+        except Exception as e:
+            results["errors"].append({"op": op_type, "error": str(e)})
+
+    return results
 
 # --- Seed Data ---
 
@@ -660,14 +855,14 @@ async def seed_data(user: dict = Depends(get_current_user)):
     
     # Create animals
     animals_data = [
-        {"name": "Lola", "tag_id": "A001", "breed": "Angus", "animal_type": "vaca", "birth_date": "2021-03-15", "weight": 450, "sex": "hembra", "paddock_id": paddock_ids[0]},
-        {"name": "Toro Negro", "tag_id": "A002", "breed": "Brahman", "animal_type": "toro", "birth_date": "2020-06-20", "weight": 680, "sex": "macho", "paddock_id": paddock_ids[0]},
-        {"name": "Manchas", "tag_id": "A003", "breed": "Holstein", "animal_type": "vaca", "birth_date": "2022-01-10", "weight": 420, "sex": "hembra", "paddock_id": paddock_ids[1]},
-        {"name": "Ternero Luna", "tag_id": "A004", "breed": "Angus", "animal_type": "ternero", "birth_date": "2024-08-05", "weight": 120, "sex": "hembra", "paddock_id": paddock_ids[0]},
-        {"name": "Valentina", "tag_id": "A005", "breed": "Simmental", "animal_type": "novilla", "birth_date": "2023-02-14", "weight": 320, "sex": "hembra", "paddock_id": paddock_ids[1]},
-        {"name": "El Rey", "tag_id": "A006", "breed": "Charolais", "animal_type": "toro", "birth_date": "2019-11-25", "weight": 750, "sex": "macho", "paddock_id": paddock_ids[0]},
-        {"name": "Estrella", "tag_id": "A007", "breed": "Jersey", "animal_type": "vaca", "birth_date": "2021-07-08", "weight": 380, "sex": "hembra", "paddock_id": paddock_ids[1]},
-        {"name": "Becerro Sol", "tag_id": "A008", "breed": "Brahman", "animal_type": "ternero", "birth_date": "2025-01-20", "weight": 80, "sex": "macho", "paddock_id": paddock_ids[0]},
+        {"name": "Lola", "tag_id": "A001", "breed": "Angus", "animal_type": "vaca", "birth_date": "2021-03-15", "weight": 450, "sex": "hembra", "paddock_id": paddock_ids[0], "expected_calving_date": "2026-03-20", "last_breeding_date": "2025-06-15", "last_vaccination_date": "2025-01-15"},
+        {"name": "Toro Negro", "tag_id": "A002", "breed": "Brahman", "animal_type": "toro", "birth_date": "2020-06-20", "weight": 680, "sex": "macho", "paddock_id": paddock_ids[0], "expected_calving_date": "", "last_breeding_date": "", "last_vaccination_date": "2025-08-10"},
+        {"name": "Manchas", "tag_id": "A003", "breed": "Holstein", "animal_type": "vaca", "birth_date": "2022-01-10", "weight": 420, "sex": "hembra", "paddock_id": paddock_ids[1], "expected_calving_date": "2026-04-05", "last_breeding_date": "2025-07-01", "last_vaccination_date": "2024-06-20"},
+        {"name": "Ternero Luna", "tag_id": "A004", "breed": "Angus", "animal_type": "ternero", "birth_date": "2024-08-05", "weight": 120, "sex": "hembra", "paddock_id": paddock_ids[0], "expected_calving_date": "", "last_breeding_date": "", "last_vaccination_date": "2024-12-10"},
+        {"name": "Valentina", "tag_id": "A005", "breed": "Simmental", "animal_type": "novilla", "birth_date": "2023-02-14", "weight": 320, "sex": "hembra", "paddock_id": paddock_ids[1], "expected_calving_date": "", "last_breeding_date": "", "last_vaccination_date": "2025-05-01"},
+        {"name": "El Rey", "tag_id": "A006", "breed": "Charolais", "animal_type": "toro", "birth_date": "2019-11-25", "weight": 750, "sex": "macho", "paddock_id": paddock_ids[0], "expected_calving_date": "", "last_breeding_date": "", "last_vaccination_date": "2025-03-15"},
+        {"name": "Estrella", "tag_id": "A007", "breed": "Jersey", "animal_type": "vaca", "birth_date": "2021-07-08", "weight": 380, "sex": "hembra", "paddock_id": paddock_ids[1], "expected_calving_date": "2026-03-10", "last_breeding_date": "2025-06-05", "last_vaccination_date": "2025-01-20"},
+        {"name": "Becerro Sol", "tag_id": "A008", "breed": "Brahman", "animal_type": "ternero", "birth_date": "2025-01-20", "weight": 80, "sex": "macho", "paddock_id": paddock_ids[0], "expected_calving_date": "", "last_breeding_date": "", "last_vaccination_date": "2025-02-15"},
     ]
     
     animal_ids = []

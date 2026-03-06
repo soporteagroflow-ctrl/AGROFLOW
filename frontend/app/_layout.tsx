@@ -90,6 +90,7 @@ export default function RootLayout() {
         <Stack.Screen name="animal/nuevo" options={{ presentation: 'modal' }} />
         <Stack.Screen name="potrero/[id]" options={{ presentation: 'modal' }} />
         <Stack.Screen name="potrero/nuevo" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="alertas" options={{ presentation: 'modal' }} />
       </Stack>
     </>
   );
