@@ -1,7 +1,8 @@
-import { View, Text, StyleSheet, TouchableOpacity, Platform, ImageBackground } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Platform, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, FONT_SIZE } from '../src/theme';
+import { AGROFLOW_LOGO } from '../assets/logo_base64';
 
 export default function LoginScreen() {
   const handleGoogleLogin = () => {
@@ -17,12 +18,8 @@ export default function LoginScreen() {
     <View style={styles.container}>
       <View style={styles.heroSection}>
         <View style={styles.heroOverlay}>
-          <View style={styles.logoContainer}>
-            <View style={styles.logoCircle}>
-              <Ionicons name="leaf" size={40} color={COLORS.white} />
-            </View>
-          </View>
-          <Text style={styles.appName}>RanchoPro</Text>
+          <Image source={{ uri: AGROFLOW_LOGO }} style={styles.logo} resizeMode="contain" />
+          <Text style={styles.appName}>AgroFlow</Text>
           <Text style={styles.tagline}>Gestión Ganadera Inteligente</Text>
         </View>
       </View>
@@ -84,18 +81,10 @@ const styles = StyleSheet.create({
     width: '100%',
     backgroundColor: 'rgba(46, 125, 50, 0.85)',
   },
-  logoContainer: {
-    marginBottom: SPACING.md,
-  },
-  logoCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.3)',
+  logo: {
+    width: 100,
+    height: 100,
+    marginBottom: SPACING.sm,
   },
   appName: {
     fontSize: FONT_SIZE.title,

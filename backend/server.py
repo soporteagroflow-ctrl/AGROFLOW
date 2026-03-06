@@ -2,14 +2,23 @@ from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Depend
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 import os
 import logging
 import uuid
 import httpx
+import csv
+import io
+import re
+import hashlib
+import secrets
 from pathlib import Path
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
 from typing import List, Optional
 from datetime import datetime, timezone, timedelta
+from starlette.responses import StreamingResponse
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -19,8 +28,6 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-# AI disabled per user request - zero cost
-
 # Configure logging early
 logging.basicConfig(
     level=logging.INFO,
@@ -28,8 +35,43 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-app = FastAPI()
+# Rate limiter
+limiter = Limiter(key_func=get_remote_address)
+
+app = FastAPI(title="AgroFlow API", version="2.0.0")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 api_router = APIRouter(prefix="/api")
+
+# --- Input Sanitization ---
+
+def sanitize_string(value: str, max_length: int = 500) -> str:
+    """Sanitize string input to prevent injection and limit size"""
+    if not value:
+        return value
+    # Strip HTML tags
+    value = re.sub(r'<[^>]+>', '', value)
+    # Limit length
+    value = value[:max_length].strip()
+    return value
+
+# --- Audit Logger ---
+
+async def log_audit(user_id: str, action: str, resource: str, resource_id: str = "", details: str = ""):
+    """Log user actions for audit trail"""
+    try:
+        await db.audit_logs.insert_one({
+            "log_id": f"log_{uuid.uuid4().hex[:12]}",
+            "user_id": user_id,
+            "action": action,
+            "resource": resource,
+            "resource_id": resource_id,
+            "details": details,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "ip": "",
+        })
+    except Exception as e:
+        logger.warning(f"Audit log error: {e}")
 
 # --- Pydantic Models ---
 
@@ -177,7 +219,8 @@ async def get_current_user(request: Request) -> dict:
 # --- Auth Endpoints ---
 
 @api_router.post("/auth/session")
-async def exchange_session(req: SessionRequest, response: Response):
+@limiter.limit("10/minute")
+async def exchange_session(request: Request, req: SessionRequest, response: Response):
     async with httpx.AsyncClient() as client_http:
         resp = await client_http.get(
             "https://demobackend.emergentagent.com/auth/v1/env/oauth/session-data",
@@ -278,6 +321,7 @@ async def create_animal(data: AnimalCreate, user: dict = Depends(get_current_use
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.animals.insert_one(animal)
+    await log_audit(user["user_id"], "create", "animal", animal["animal_id"], f"Creó {data.name}")
     created = await db.animals.find_one({"animal_id": animal["animal_id"]}, {"_id": 0})
     return created
 
@@ -914,6 +958,117 @@ async def seed_data(user: dict = Depends(get_current_user)):
         })
     
     return {"message": "Datos de ejemplo creados exitosamente", "seeded": True}
+
+# --- Photo Upload (base64) ---
+
+class PhotoUpload(BaseModel):
+    animal_id: str
+    photo_base64: str  # base64 encoded image
+    description: str = ""
+
+@api_router.post("/animals/{animal_id}/photo")
+@limiter.limit("20/minute")
+async def upload_animal_photo(request: Request, animal_id: str, data: PhotoUpload, user: dict = Depends(get_current_user)):
+    animal = await db.animals.find_one(
+        {"animal_id": animal_id, "user_id": user["user_id"]}, {"_id": 0}
+    )
+    if not animal:
+        raise HTTPException(status_code=404, detail="Animal no encontrado")
+    
+    # Validate base64 size (max 5MB)
+    if len(data.photo_base64) > 5 * 1024 * 1024 * 1.37:  # base64 overhead
+        raise HTTPException(status_code=400, detail="Imagen demasiado grande (máx 5MB)")
+    
+    photo = {
+        "photo_id": f"photo_{uuid.uuid4().hex[:12]}",
+        "animal_id": animal_id,
+        "user_id": user["user_id"],
+        "photo_base64": data.photo_base64,
+        "description": sanitize_string(data.description, 200),
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.animal_photos.insert_one(photo)
+    await log_audit(user["user_id"], "upload_photo", "animal", animal_id)
+    return {"photo_id": photo["photo_id"], "message": "Foto subida exitosamente"}
+
+@api_router.get("/animals/{animal_id}/photos")
+async def get_animal_photos(animal_id: str, user: dict = Depends(get_current_user)):
+    photos = await db.animal_photos.find(
+        {"animal_id": animal_id, "user_id": user["user_id"]}, {"_id": 0}
+    ).sort("created_at", -1).to_list(50)
+    return photos
+
+@api_router.delete("/animals/{animal_id}/photos/{photo_id}")
+async def delete_animal_photo(animal_id: str, photo_id: str, user: dict = Depends(get_current_user)):
+    result = await db.animal_photos.delete_one(
+        {"photo_id": photo_id, "animal_id": animal_id, "user_id": user["user_id"]}
+    )
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Foto no encontrada")
+    await log_audit(user["user_id"], "delete_photo", "animal", animal_id)
+    return {"message": "Foto eliminada"}
+
+# --- CSV Export ---
+
+@api_router.get("/export/animals")
+async def export_animals_csv(user: dict = Depends(get_current_user)):
+    animals = await db.animals.find(
+        {"user_id": user["user_id"]}, {"_id": 0}
+    ).to_list(10000)
+    
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["ID", "Nombre", "Arete", "Tipo", "Raza", "Sexo", "Peso (kg)", "Estado", "Fecha Nacimiento", "Parto Esperado", "Última Vacuna"])
+    for a in animals:
+        writer.writerow([
+            a.get("animal_id", ""), a.get("name", ""), a.get("tag_id", ""),
+            a.get("animal_type", ""), a.get("breed", ""), a.get("sex", ""),
+            a.get("weight", 0), a.get("status", ""), a.get("birth_date", ""),
+            a.get("expected_calving_date", ""), a.get("last_vaccination_date", "")
+        ])
+    
+    output.seek(0)
+    await log_audit(user["user_id"], "export_csv", "animals")
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=agroflow_ganado.csv"}
+    )
+
+@api_router.get("/export/finances")
+async def export_finances_csv(user: dict = Depends(get_current_user)):
+    finances = await db.finances.find(
+        {"user_id": user["user_id"]}, {"_id": 0}
+    ).to_list(10000)
+    
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["ID", "Tipo", "Categoría", "Monto", "Descripción", "Fecha"])
+    for f in finances:
+        writer.writerow([
+            f.get("finance_id", ""), f.get("transaction_type", ""),
+            f.get("category", ""), f.get("amount", 0),
+            f.get("description", ""), f.get("date", "")
+        ])
+    
+    output.seek(0)
+    await log_audit(user["user_id"], "export_csv", "finances")
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=agroflow_finanzas.csv"}
+    )
+
+# --- Audit Logs ---
+
+@api_router.get("/audit-logs")
+async def get_audit_logs(user: dict = Depends(get_current_user)):
+    if user.get("role") != "owner":
+        raise HTTPException(status_code=403, detail="Solo propietarios pueden ver logs de auditoría")
+    logs = await db.audit_logs.find(
+        {"user_id": user["user_id"]}, {"_id": 0}
+    ).sort("timestamp", -1).to_list(100)
+    return logs
 
 # Include router
 app.include_router(api_router)

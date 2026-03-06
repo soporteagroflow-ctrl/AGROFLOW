@@ -4,10 +4,26 @@ import os
 
 @pytest.fixture(scope="session")
 def base_url():
-    """Get base URL from environment"""
-    url = os.environ.get('EXPO_PUBLIC_BACKEND_URL')
+    """Get base URL from environment - use frontend .env for public URL"""
+    # For backend tests, use the public URL from frontend/.env
+    frontend_env_path = "/app/frontend/.env"
+    url = None
+    
+    # Try to read from frontend/.env
+    if os.path.exists(frontend_env_path):
+        with open(frontend_env_path, 'r') as f:
+            for line in f:
+                if line.startswith('EXPO_PUBLIC_BACKEND_URL='):
+                    url = line.split('=', 1)[1].strip()
+                    break
+    
+    # Fallback to environment variable
     if not url:
-        raise ValueError("EXPO_PUBLIC_BACKEND_URL not set in environment")
+        url = os.environ.get('EXPO_PUBLIC_BACKEND_URL')
+    
+    if not url:
+        raise ValueError("EXPO_PUBLIC_BACKEND_URL not found in frontend/.env or environment")
+    
     return url.rstrip('/')
 
 @pytest.fixture(scope="session")

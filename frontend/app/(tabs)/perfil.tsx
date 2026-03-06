@@ -159,7 +159,7 @@ export default function PerfilScreen() {
           <View style={styles.infoCard}>
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>Versión</Text>
-              <Text style={styles.infoValue}>1.1.0</Text>
+              <Text style={styles.infoValue}>2.0.0</Text>
             </View>
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>Motor de alertas</Text>
@@ -182,7 +182,7 @@ export default function PerfilScreen() {
           <Text style={styles.logoutText}>Cerrar Sesión</Text>
         </TouchableOpacity>
 
-        <Text style={styles.version}>RanchoPro v1.1.0 - Cero costos de IA</Text>
+        <Text style={styles.version}>AgroFlow v2.0.0 - Cero costos de IA</Text>
         <View style={{ height: 40 }} />
       </ScrollView>
     </SafeAreaView>

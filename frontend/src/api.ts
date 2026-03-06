@@ -80,4 +80,18 @@ export const syncOfflineData = (operations: any[]) =>
 // Seed
 export const seedData = () => api.post('/seed');
 
+// Photos
+export const getAnimalPhotos = (animalId: string) => api.get(`/animals/${animalId}/photos`);
+export const uploadAnimalPhoto = (animalId: string, data: { animal_id: string; photo_base64: string; description: string }) =>
+  api.post(`/animals/${animalId}/photo`, data);
+export const deleteAnimalPhoto = (animalId: string, photoId: string) =>
+  api.delete(`/animals/${animalId}/photos/${photoId}`);
+
+// Export
+export const exportAnimalsCSV = () => api.get('/export/animals', { responseType: 'blob' });
+export const exportFinancesCSV = () => api.get('/export/finances', { responseType: 'blob' });
+
+// Audit
+export const getAuditLogs = () => api.get('/audit-logs');
+
 export default api;

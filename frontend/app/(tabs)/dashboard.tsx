@@ -153,7 +153,7 @@ export default function DashboardScreen() {
         {animals.total === 0 && (
           <View style={styles.emptyCard}>
             <Ionicons name="add-circle-outline" size={48} color={COLORS.primary} />
-            <Text style={styles.emptyTitle}>¡Comienza a usar RanchoPro!</Text>
+            <Text style={styles.emptyTitle}>¡Comienza a usar AgroFlow!</Text>
             <Text style={styles.emptyText}>Agrega datos de ejemplo para explorar la app</Text>
             <TouchableOpacity testID="dashboard-seed-btn" style={styles.seedButton} onPress={handleSeed} disabled={seeding}>
               {seeding ? <ActivityIndicator color={COLORS.white} /> : <Text style={styles.seedButtonText}>Cargar datos de ejemplo</Text>}
