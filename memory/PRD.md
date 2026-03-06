@@ -1,43 +1,45 @@
-# RanchoPro - Gestión Ganadera Inteligente
+# AgroFlow - Gestión Ganadera Inteligente
 
-## Product Requirements Document (PRD) v1.1
+## PRD v2.0.0
 
-### Concepto
-- **App**: RanchoPro - Gestión ganadera móvil todo-en-uno
-- **Usuarios**: Ganaderos pequeños y medianos, veterinarios
-- **Costo de operación**: CERO (sin IA de pago, mapas gratuitos)
+### Rebrand: RanchoPro → AgroFlow
+- Logo personalizado con vaca geométrica + flechas de crecimiento
+- Nuevo nombre, slug y esquema de app
 
 ### Arquitectura
-- Frontend: React Native Expo SDK 54 + expo-router
-- Backend: Python FastAPI + MongoDB
+- Frontend: Expo SDK 54 + expo-router
+- Backend: FastAPI + MongoDB + slowapi (rate limiting)
 - Mapas: OpenStreetMap + Esri Satellite (NDVI)
 - Alertas: Motor basado en reglas (cero costo)
 - Auth: Emergent Google OAuth
 - Offline: AsyncStorage + NetInfo + cola de sync
 
-### Funcionalidades v1.1
+### Seguridad (Fase 1)
+- Rate limiting: 10 req/min en auth, 20 req/min en photos
+- Sanitización de inputs (strip HTML, limit length)
+- Audit logging de todas las acciones críticas
+- Solo owners pueden ver audit logs
+- Validación de tamaño de fotos (máx 5MB)
 
-1. **Dashboard**: KPIs, gráficos, alertas urgentes, resumen financiero, modo offline
-2. **Gestión de Ganado**: CRUD completo, historial sanitario, peso, campos reproductivos
-3. **Gestión de Potreros**: 3 vistas (Lista/Mapa/NDVI Satelital), GPS, estado pasto
-4. **Sistema de Alertas**: Vacunación pendiente, parto próximo, potrero saturado, pasto deteriorado, revisión pendiente
-5. **Análisis NDVI Satelital**: Vista satelital Esri, overlay de salud, recomendaciones
-6. **Modo Offline**: Caché automático, cola de operaciones, sync al reconectar
-7. **Finanzas**: Ingresos/gastos por categoría, resumen
-8. **Perfil**: Config finca, controles de sync, estado de conexión
+### Funcionalidades v2.0
 
-### API Endpoints
-- Auth: /api/auth/session, /api/auth/me, /api/auth/logout, /api/auth/profile
-- Animals: /api/animals (CRUD), /api/animals/{id}/health, /api/animals/{id}/weight
-- Paddocks: /api/paddocks (CRUD)
-- Finance: /api/finances (CRUD), /api/finances/summary
-- Dashboard: /api/dashboard
-- **Alerts**: /api/alerts (basado en reglas)
-- **NDVI**: /api/ndvi (datos satelitales)
-- **Sync**: /api/sync (sincronización offline)
-- Seed: /api/seed
+1. **Auth**: Google OAuth + sesiones 7 días
+2. **Dashboard**: KPIs, gráficos, alertas urgentes, modo offline
+3. **Ganado**: CRUD + salud + peso + campos reproductivos + **FOTOS**
+4. **Potreros**: Lista/Mapa/**NDVI Satelital**
+5. **Alertas**: Vacunación, parto, saturación, pasto, revisión
+6. **NDVI**: Vista satelital Esri + recomendaciones
+7. **Offline**: Caché + cola + sync automático
+8. **Finanzas**: Ingresos/gastos + **EXPORTAR CSV**
+9. **Exportar**: CSV de animales y finanzas con headers español
+10. **Fotos**: Subir/ver/eliminar fotos de animales (base64)
+11. **Auditoría**: Log de acciones (solo owners)
+12. **Perfil**: Config finca + controles sync
 
-### IA DESACTIVADA
-- Sin costo operativo
-- Motor de alertas 100% basado en reglas
+### API Endpoints (28 total)
+Auth (4), Animals (5), Health (2), Weight (2), Photos (3), Paddocks (4), Finance (4), Dashboard (1), Alerts (1), NDVI (1), Sync (1), Export (2), Audit (1), Seed (1)
+
+### Cero Costos de IA
+- Sin integraciones LLM
+- Motor de alertas basado en reglas
 - NDVI derivado de datos de campo
