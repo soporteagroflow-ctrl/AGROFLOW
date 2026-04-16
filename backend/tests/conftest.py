@@ -1,0 +1,53 @@
+import pytest
+import requests
+import os
+
+@pytest.fixture(scope="session")
+def base_url():
+    """Get base URL from environment - use frontend .env for public URL"""
+    # For backend tests, use the public URL from frontend/.env
+    frontend_env_path = "/app/frontend/.env"
+    url = None
+    
+    # Try to read from frontend/.env
+    if os.path.exists(frontend_env_path):
+        with open(frontend_env_path, 'r') as f:
+            for line in f:
+                if line.startswith('EXPO_PUBLIC_BACKEND_URL='):
+                    url = line.split('=', 1)[1].strip()
+                    break
+    
+    # Fallback to environment variable
+    if not url:
+        url = os.environ.get('EXPO_PUBLIC_BACKEND_URL')
+    
+    if not url:
+        raise ValueError("EXPO_PUBLIC_BACKEND_URL not found in frontend/.env or environment")
+    
+    return url.rstrip('/')
+
+@pytest.fixture(scope="session")
+def session_token():
+    """Test session token from MongoDB - iteration 2"""
+    return "test_session_v2_1772786924"
+
+@pytest.fixture(scope="session")
+def api_client(session_token):
+    """Authenticated API client"""
+    session = requests.Session()
+    session.headers.update({
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {session_token}"
+    })
+    return session
+
+@pytest.fixture
+def clean_test_data():
+    """Cleanup function for test data"""
+    created_ids = {
+        "animals": [],
+        "paddocks": [],
+        "finances": []
+    }
+    yield created_ids
+    # Cleanup logic can be added here if needed

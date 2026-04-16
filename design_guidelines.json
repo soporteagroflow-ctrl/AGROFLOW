@@ -1,0 +1,182 @@
+{
+  "project_name": "RanchMaster_Expo",
+  "persona": "E1",
+  "design_philosophy": {
+    "core_concept": "Tactical Agriculture",
+    "visual_style": "High-Contrast Earth",
+    "description": "A rugged, field-ready aesthetic that merges military-grade legibility with organic textures. Design for the rancher standing in bright sunlight with dirty hands. Big touch targets, high contrast text, and zero fluff.",
+    "rules": [
+      "No gradients that reduce contrast. Solid, flat colors only.",
+      "Touch targets must be minimum 48x48px (E1 Rule: Go for 56px).",
+      "Text must be pure White (#FFFFFF) on dark backgrounds, or pure Black (#000000) on light. No subtle greys for essential data.",
+      "Use 'Cardless' lists where possible to save screen real estate, or high-contrast bordered cards."
+    ]
+  },
+  "technical_setup": {
+    "framework": "React Native (Expo)",
+    "styling_engine": "NativeWind (Tailwind CSS for Native)",
+    "icons": "Lucide React Native (via lucide-react-native)",
+    "maps": "react-native-maps (OpenStreetMap configuration)",
+    "charts": "react-native-chart-kit",
+    "fonts": "System Fonts (San Francisco / Roboto) to ensure zero-latency rendering",
+    "dependencies_to_install": [
+      "nativewind",
+      "tailwindcss",
+      "react-native-maps",
+      "react-native-chart-kit",
+      "react-native-svg",
+      "clsx",
+      "tailwind-merge",
+      "lucide-react-native",
+      "date-fns",
+      "zustand",
+      "axios",
+      "@react-native-async-storage/async-storage"
+    ]
+  },
+  "theme": {
+    "colors": {
+      "primary": {
+        "DEFAULT": "#2E7D32",
+        "foreground": "#FFFFFF",
+        "description": "Forest Green - The color of healthy pasture."
+      },
+      "secondary": {
+        "DEFAULT": "#D84315",
+        "foreground": "#FFFFFF",
+        "description": "Burnt Orange - High visibility accent for alerts and floating actions."
+      },
+      "background": {
+        "DEFAULT": "#1A1816",
+        "light": "#F5F5F0",
+        "description": "Deep Loam (Dark) or Bone White (Light). Default to Dark for battery/glare balance in some contexts, but support Light for direct sun."
+      },
+      "surface": {
+        "DEFAULT": "#2D2A26",
+        "light": "#FFFFFF",
+        "description": "Lighter earth tone for cards."
+      },
+      "muted": {
+        "DEFAULT": "#8D8D8D",
+        "foreground": "#A3A3A3"
+      },
+      "border": "#45403B",
+      "error": "#CF6679",
+      "success": "#4CAF50"
+    },
+    "typography": {
+      "font_family": {
+        "sans": "System",
+        "mono": "System"
+      },
+      "sizes": {
+        "xs": "12px",
+        "sm": "14px",
+        "base": "16px",
+        "lg": "18px",
+        "xl": "20px",
+        "2xl": "24px",
+        "3xl": "30px",
+        "4xl": "36px"
+      }
+    },
+    "spacing": {
+      "container_padding": "p-5",
+      "element_gap": "gap-4",
+      "touch_target": "h-14"
+    },
+    "border_radius": {
+      "card": "rounded-xl",
+      "button": "rounded-lg"
+    }
+  },
+  "layout_strategies": {
+    "mobile_container": "flex-1 bg-background px-4 pt-12 pb-6",
+    "bento_grid": "flex-row flex-wrap gap-3",
+    "card_style": "bg-surface border border-border p-4 rounded-xl shadow-sm",
+    "bottom_nav": "absolute bottom-0 w-full bg-surface border-t border-border h-20 flex-row justify-around items-center pb-4"
+  },
+  "components": {
+    "Button": {
+      "base": "h-14 rounded-lg flex-row items-center justify-center active:opacity-90",
+      "variants": {
+        "default": "bg-primary",
+        "outline": "border-2 border-primary bg-transparent",
+        "ghost": "bg-transparent",
+        "destructive": "bg-red-600"
+      },
+      "text_style": "text-white font-bold text-lg"
+    },
+    "Input": {
+      "base": "bg-surface border border-border h-14 rounded-lg px-4 text-white placeholder:text-muted-foreground",
+      "focus": "border-primary"
+    },
+    "Card": {
+      "base": "bg-surface border border-border rounded-xl overflow-hidden"
+    }
+  },
+  "features_and_flows": {
+    "auth": {
+      "name": "Login con Google",
+      "layout": "Hero Image Top (40%) + Login Action Bottom (60%)",
+      "image_ref": "hero_cattle",
+      "notes": "Simple, one-tap login. No complex forms."
+    },
+    "dashboard": {
+      "name": "Panel Principal",
+      "layout": "Bento Grid of KPIs",
+      "widgets": [
+        {"title": "Total Ganado", "size": "half", "icon": "Beef"},
+        {"title": "Alertas Sanitarias", "size": "half", "icon": "Siren", "color": "text-red-500"},
+        {"title": "Producción Leche", "size": "full", "icon": "Droplet"},
+        {"title": "Clima Hoy", "size": "full", "icon": "CloudSun"}
+      ]
+    },
+    "cattle_list": {
+      "name": "Gestión de Ganado",
+      "layout": "Search Bar + Infinite Scroll List",
+      "item_style": "Avatar (Left) + ID/Name (Bold) + Status Badge (Right)",
+      "actions": "Floating Action Button (FAB) for 'Agregar Animal'"
+    },
+    "map_view": {
+      "name": "Gestión de Potreros",
+      "library": "react-native-maps",
+      "provider": "osmdroid (via UrlTile)",
+      "style": "Satellite or Standard OSM",
+      "interactions": "Tap polygon to see pasture details"
+    }
+  },
+  "assets": {
+    "images": {
+      "hero_cattle": {
+        "url": "https://images.unsplash.com/photo-1762437872255-22d922ad10d6?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzR8MHwxfHNlYXJjaHwyfHxjYXR0bGUlMjByYW5jaCUyMGNvd3MlMjBwYXN0dXJlfGVufDB8fHx8MTc3Mjc4NDk5OHww&ixlib=rb-4.1.0&q=85",
+        "alt": "Brown cow and calf in grassy field",
+        "purpose": "Auth Screen Hero"
+      },
+      "vet_checkup": {
+        "url": "https://images.unsplash.com/photo-1635504931620-2b5d3edf0598?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzV8MHwxfHNlYXJjaHwzfHx2ZXRlcmluYXJpYW4lMjBjb3clMjBjaGVja3VwfGVufDB8fHx8MTc3Mjc4NDk5OXww&ixlib=rb-4.1.0&q=85",
+        "alt": "Cow with ear tag",
+        "purpose": "Health Records Section Header"
+      },
+      "pasture_overview": {
+        "url": "https://images.unsplash.com/photo-1581895082508-e4358e9fb522?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzR8MHwxfHNlYXJjaHwxfHxjYXR0bGUlMjByYW5jaCUyMGNvd3MlMjBwYXN0dXJlfGVufDB8fHx8MTc3Mjc4NDk5OHww&ixlib=rb-4.1.0&q=85",
+        "alt": "Sheep/Cattle grazing in distance",
+        "purpose": "Pasture Management Cover"
+      }
+    }
+  },
+  "instructions_to_main_agent": [
+    "1. SETUP: Install 'nativewind' and 'tailwindcss' immediately. Generate the 'tailwind.config.js' manually if needed.",
+    "2. LANGUAGE: All UI labels must be in Spanish (e.g., 'Guardar', 'Cancelar', 'Nuevo Animal').",
+    "3. NAVIGATION: Use 'expo-router' with a Bottom Tab layout.",
+    "4. MAPS: Implementation of OpenStreetMap in React Native requires using '<UrlTile urlTemplate=\"https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png\" />' inside '<MapView>'.",
+    "5. DATA-TESTID: Every interactive element must have a 'testID' prop (React Native equivalent of data-testid). Format: 'screen-element-action' (e.g., 'login-button-press').",
+    "6. THEME: Implement the 'High Contrast Earth' theme. Do not use low-contrast greys."
+  ],
+  "universal_guidelines": [
+    "Use 'SafeAreaView' for all screens.",
+    "Avoid 'KeyboardAvoidingView' issues by testing form inputs.",
+    "Use 'ScrollView' with 'contentContainerStyle={{ flexGrow: 1 }}' for scrollable forms.",
+    "For icons, import from 'lucide-react-native' and style with NativeWind classes (e.g., 'text-primary')."
+  ]
+}
