@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, Pressable, ScrollView } from 'react-native';
+import { View, Text, Pressable, ScrollView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { signInWithRedirect } from 'firebase/auth';
 
@@ -17,8 +17,13 @@ export default function LoginScreen() {
     setLoading(true);
     setError('');
     try {
-      await signInWithRedirect(auth, googleProvider);
-      // Firebase will redirect back, then onAuthStateChanged in _layout.tsx handles the rest
+      if (Platform.OS === 'web') {
+        const { signInWithPopup } = require('firebase/auth');
+        await signInWithPopup(auth, googleProvider);
+      } else {
+        await signInWithRedirect(auth, googleProvider);
+      }
+      // Firebase will handle the rest
     } catch (err: any) {
       console.error('Login error:', err);
       setError('Error al iniciar sesión. Intenta de nuevo.');
