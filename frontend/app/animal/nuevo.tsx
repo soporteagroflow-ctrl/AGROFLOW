@@ -1,160 +1,371 @@
 import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
+import {
+  View,
+  Text,
+  ScrollView,
+  Pressable,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+
 import { createAnimal, getPaddocks } from '../../src/api';
-import { COLORS, SPACING, FONT_SIZE } from '../../src/theme';
+import { useToastStore } from '../../src/store';
+import { FONT_SIZE, RADIUS, SPACING } from '../../src/theme';
+import { useTheme } from '../../src/ThemeContext';
+import { Button, Card, Input, ScreenBackground, Section } from '../../src/ui';
+
+const TYPES = [
+  { key: 'vaca', label: 'Vaca', icon: 'female' as const },
+  { key: 'toro', label: 'Toro', icon: 'male' as const },
+  { key: 'ternero', label: 'Ternero', icon: 'happy' as const },
+  { key: 'novilla', label: 'Novilla', icon: 'flower' as const },
+];
 
 export default function NuevoAnimalScreen() {
   const router = useRouter();
+  const { palette } = useTheme();
+  const toast = useToastStore();
   const [saving, setSaving] = useState(false);
   const [paddocks, setPaddocks] = useState<any[]>([]);
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [form, setForm] = useState({
-    name: '', tag_id: '', breed: '', animal_type: 'vaca',
-    birth_date: '', weight: '', sex: 'hembra', paddock_id: '', notes: '',
+    name: '',
+    tag_id: '',
+    breed: '',
+    animal_type: 'vaca',
+    birth_date: '',
+    weight: '',
+    sex: 'hembra',
+    paddock_id: '',
+    notes: '',
   });
 
   useEffect(() => {
-    getPaddocks().then(r => setPaddocks(r.data)).catch(() => {});
+    getPaddocks()
+      .then((r) => setPaddocks(r.data))
+      .catch(() => toast.show('No se pudieron cargar los potreros', 'warning'));
   }, []);
 
+  const validate = () => {
+    const e: Record<string, string> = {};
+    if (!form.name.trim()) e.name = 'El nombre es obligatorio';
+    if (form.weight && isNaN(Number(form.weight))) e.weight = 'Peso debe ser un número';
+    if (form.birth_date && !/^\d{4}-\d{2}-\d{2}$/.test(form.birth_date))
+      e.birth_date = 'Formato: YYYY-MM-DD';
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
   const handleSubmit = async () => {
-    if (!form.name) return;
+    if (!validate()) return;
     setSaving(true);
     try {
       await createAnimal({ ...form, weight: form.weight ? parseFloat(form.weight) : 0 });
+      toast.show('Animal registrado exitosamente', 'success');
       router.back();
-    } catch (e) { console.log('Error:', e); }
-    finally { setSaving(false); }
+    } catch {
+      toast.show('Error al guardar el animal. Intenta de nuevo.', 'error');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const types = [
-    { key: 'vaca', label: 'Vaca', icon: 'female' },
-    { key: 'toro', label: 'Toro', icon: 'male' },
-    { key: 'ternero', label: 'Ternero', icon: 'happy' },
-    { key: 'novilla', label: 'Novilla', icon: 'flower' },
-  ];
-
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity testID="nuevo-animal-back" onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color={COLORS.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Nuevo Animal</Text>
-        <View style={{ width: 40 }} />
-      </View>
+    <ScreenBackground>
+      <SafeAreaView style={{ flex: 1 }}>
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            paddingHorizontal: SPACING.lg,
+            paddingTop: SPACING.md,
+            paddingBottom: SPACING.sm,
+          }}
+        >
+          <Pressable
+            testID="nuevo-animal-back"
+            onPress={() => router.back()}
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: RADIUS.pill,
+              borderWidth: 1,
+              borderColor: palette.border,
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
+          >
+            <Ionicons name="arrow-back" size={18} color={palette.text} />
+          </Pressable>
+          <Text
+            style={{
+              color: palette.text,
+              fontSize: FONT_SIZE.lg,
+              fontWeight: '800',
+              letterSpacing: -0.2,
+            }}
+          >
+            Nuevo animal
+          </Text>
+          <View style={{ width: 36 }} />
+        </View>
 
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.form}>
-          <Text style={styles.label}>Nombre *</Text>
-          <TextInput testID="nuevo-animal-name" style={styles.input} value={form.name} onChangeText={v => setForm({ ...form, name: v })} placeholder="Nombre del animal" placeholderTextColor={COLORS.muted} />
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ flex: 1 }}
+        >
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingHorizontal: SPACING.lg, paddingBottom: 40 }}
+          >
+            <Card padding={SPACING.md} style={{ marginTop: SPACING.md }}>
+              <Input
+                testID="nuevo-animal-name"
+                label="Nombre *"
+                value={form.name}
+                onChangeText={(v) => setForm({ ...form, name: v })}
+                placeholder="Nombre del animal"
+                error={errors.name}
+              />
 
-          <Text style={styles.label}>Tipo</Text>
-          <View style={styles.typeRow}>
-            {types.map(t => (
-              <TouchableOpacity
-                key={t.key}
-                testID={`nuevo-animal-type-${t.key}`}
-                style={[styles.typeBtn, form.animal_type === t.key && styles.typeBtnActive]}
-                onPress={() => setForm({ ...form, animal_type: t.key })}
+              <Text
+                style={{
+                  color: palette.textSecondary,
+                  fontSize: FONT_SIZE.sm,
+                  fontWeight: '600',
+                  marginBottom: 6,
+                }}
               >
-                <Ionicons name={t.icon as any} size={20} color={form.animal_type === t.key ? COLORS.white : COLORS.muted} />
-                <Text style={[styles.typeBtnText, form.animal_type === t.key && { color: COLORS.white }]}>{t.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <Text style={styles.label}>Sexo</Text>
-          <View style={styles.sexRow}>
-            <TouchableOpacity
-              testID="nuevo-animal-sex-hembra"
-              style={[styles.sexBtn, form.sex === 'hembra' && styles.sexBtnActive]}
-              onPress={() => setForm({ ...form, sex: 'hembra' })}
-            >
-              <Ionicons name="female" size={20} color={form.sex === 'hembra' ? COLORS.white : COLORS.muted} />
-              <Text style={[styles.sexBtnText, form.sex === 'hembra' && { color: COLORS.white }]}>Hembra</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              testID="nuevo-animal-sex-macho"
-              style={[styles.sexBtn, form.sex === 'macho' && styles.sexBtnActive]}
-              onPress={() => setForm({ ...form, sex: 'macho' })}
-            >
-              <Ionicons name="male" size={20} color={form.sex === 'macho' ? COLORS.white : COLORS.muted} />
-              <Text style={[styles.sexBtnText, form.sex === 'macho' && { color: COLORS.white }]}>Macho</Text>
-            </TouchableOpacity>
-          </View>
-
-          <Text style={styles.label}>Número de Arete</Text>
-          <TextInput testID="nuevo-animal-tag" style={styles.input} value={form.tag_id} onChangeText={v => setForm({ ...form, tag_id: v })} placeholder="A001" placeholderTextColor={COLORS.muted} />
-
-          <Text style={styles.label}>Raza</Text>
-          <TextInput testID="nuevo-animal-breed" style={styles.input} value={form.breed} onChangeText={v => setForm({ ...form, breed: v })} placeholder="Angus, Brahman, Holstein..." placeholderTextColor={COLORS.muted} />
-
-          <Text style={styles.label}>Peso (kg)</Text>
-          <TextInput testID="nuevo-animal-weight" style={styles.input} value={form.weight} onChangeText={v => setForm({ ...form, weight: v })} keyboardType="numeric" placeholder="450" placeholderTextColor={COLORS.muted} />
-
-          <Text style={styles.label}>Fecha Nacimiento (YYYY-MM-DD)</Text>
-          <TextInput testID="nuevo-animal-birth" style={styles.input} value={form.birth_date} onChangeText={v => setForm({ ...form, birth_date: v })} placeholder="2022-01-15" placeholderTextColor={COLORS.muted} />
-
-          {paddocks.length > 0 && (
-            <>
-              <Text style={styles.label}>Potrero</Text>
-              <View style={styles.paddockGrid}>
-                <TouchableOpacity
-                  style={[styles.paddockChip, !form.paddock_id && styles.paddockChipActive]}
-                  onPress={() => setForm({ ...form, paddock_id: '' })}
-                >
-                  <Text style={[styles.paddockChipText, !form.paddock_id && styles.paddockChipTextActive]}>Sin asignar</Text>
-                </TouchableOpacity>
-                {paddocks.map(p => (
-                  <TouchableOpacity
-                    key={p.paddock_id}
-                    style={[styles.paddockChip, form.paddock_id === p.paddock_id && styles.paddockChipActive]}
-                    onPress={() => setForm({ ...form, paddock_id: p.paddock_id })}
-                  >
-                    <Text style={[styles.paddockChipText, form.paddock_id === p.paddock_id && styles.paddockChipTextActive]}>{p.name}</Text>
-                  </TouchableOpacity>
-                ))}
+                Tipo
+              </Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                {TYPES.map((t) => {
+                  const active = form.animal_type === t.key;
+                  return (
+                    <Pressable
+                      key={t.key}
+                      testID={`nuevo-animal-type-${t.key}`}
+                      onPress={() => setForm({ ...form, animal_type: t.key })}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        paddingHorizontal: 14,
+                        paddingVertical: 8,
+                        borderRadius: RADIUS.pill,
+                        backgroundColor: active ? palette.text : 'transparent',
+                        borderColor: active ? palette.text : palette.border,
+                        borderWidth: 1,
+                        marginRight: 8,
+                        marginBottom: 8,
+                      }}
+                    >
+                      <Ionicons
+                        name={t.icon}
+                        size={14}
+                        color={active ? palette.background : palette.textSecondary}
+                      />
+                      <Text
+                        style={{
+                          color: active ? palette.background : palette.textSecondary,
+                          fontSize: FONT_SIZE.sm,
+                          fontWeight: '600',
+                          marginLeft: 4,
+                        }}
+                      >
+                        {t.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
               </View>
-            </>
-          )}
 
-          <Text style={styles.label}>Notas</Text>
-          <TextInput testID="nuevo-animal-notes" style={[styles.input, { height: 80, textAlignVertical: 'top', paddingTop: 12 }]} value={form.notes} onChangeText={v => setForm({ ...form, notes: v })} placeholder="Observaciones..." placeholderTextColor={COLORS.muted} multiline />
+              <Text
+                style={{
+                  color: palette.textSecondary,
+                  fontSize: FONT_SIZE.sm,
+                  fontWeight: '600',
+                  marginTop: SPACING.md,
+                  marginBottom: 6,
+                }}
+              >
+                Sexo
+              </Text>
+              <View style={{ flexDirection: 'row' }}>
+                {[
+                  { key: 'hembra', label: 'Hembra', icon: 'female' as const },
+                  { key: 'macho', label: 'Macho', icon: 'male' as const },
+                ].map((s, i) => {
+                  const active = form.sex === s.key;
+                  return (
+                    <Pressable
+                      key={s.key}
+                      testID={`nuevo-animal-sex-${s.key}`}
+                      onPress={() => setForm({ ...form, sex: s.key })}
+                      style={{
+                        flex: 1,
+                        paddingVertical: 10,
+                        borderRadius: RADIUS.md,
+                        backgroundColor: active ? palette.accent : palette.surface,
+                        borderColor: active ? palette.accent : palette.border,
+                        borderWidth: 1,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        marginRight: i === 0 ? SPACING.sm : 0,
+                      }}
+                    >
+                      <Ionicons
+                        name={s.icon}
+                        size={16}
+                        color={active ? palette.accentFg : palette.textSecondary}
+                      />
+                      <Text
+                        style={{
+                          color: active ? palette.accentFg : palette.text,
+                          fontSize: FONT_SIZE.sm,
+                          fontWeight: '700',
+                          marginLeft: 6,
+                        }}
+                      >
+                        {s.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
 
-          <TouchableOpacity testID="nuevo-animal-submit" style={styles.submitBtn} onPress={handleSubmit} disabled={saving}>
-            {saving ? <ActivityIndicator color={COLORS.white} /> : <Text style={styles.submitBtnText}>Guardar Animal</Text>}
-          </TouchableOpacity>
-          <View style={{ height: 40 }} />
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+              <View style={{ marginTop: SPACING.md }}>
+                <Input
+                  testID="nuevo-animal-tag"
+                  label="Número de arete"
+                  value={form.tag_id}
+                  onChangeText={(v) => setForm({ ...form, tag_id: v })}
+                  placeholder="A001"
+                />
+                <Input
+                  testID="nuevo-animal-breed"
+                  label="Raza"
+                  value={form.breed}
+                  onChangeText={(v) => setForm({ ...form, breed: v })}
+                  placeholder="Angus, Brahman, Holstein…"
+                />
+                <Input
+                  testID="nuevo-animal-weight"
+                  label="Peso (kg)"
+                  value={form.weight}
+                  onChangeText={(v) => setForm({ ...form, weight: v })}
+                  keyboardType="numeric"
+                  placeholder="450"
+                  error={errors.weight}
+                />
+                <Input
+                  testID="nuevo-animal-birth"
+                  label="Fecha de nacimiento (YYYY-MM-DD)"
+                  value={form.birth_date}
+                  onChangeText={(v) => setForm({ ...form, birth_date: v })}
+                  placeholder="2022-01-15"
+                  error={errors.birth_date}
+                />
+              </View>
+
+              {paddocks.length > 0 && (
+                <>
+                  <Text
+                    style={{
+                      color: palette.textSecondary,
+                      fontSize: FONT_SIZE.sm,
+                      fontWeight: '600',
+                      marginTop: SPACING.md,
+                      marginBottom: 6,
+                    }}
+                  >
+                    Potrero
+                  </Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                    <Pressable
+                      onPress={() => setForm({ ...form, paddock_id: '' })}
+                      style={{
+                        paddingHorizontal: 14,
+                        paddingVertical: 8,
+                        borderRadius: RADIUS.pill,
+                        backgroundColor: !form.paddock_id ? palette.text : 'transparent',
+                        borderColor: !form.paddock_id ? palette.text : palette.border,
+                        borderWidth: 1,
+                        marginRight: 8,
+                        marginBottom: 8,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: !form.paddock_id ? palette.background : palette.textSecondary,
+                          fontSize: FONT_SIZE.sm,
+                          fontWeight: '600',
+                        }}
+                      >
+                        Sin asignar
+                      </Text>
+                    </Pressable>
+                    {paddocks.map((p) => {
+                      const active = form.paddock_id === p.paddock_id;
+                      return (
+                        <Pressable
+                          key={p.paddock_id}
+                          onPress={() => setForm({ ...form, paddock_id: p.paddock_id })}
+                          style={{
+                            paddingHorizontal: 14,
+                            paddingVertical: 8,
+                            borderRadius: RADIUS.pill,
+                            backgroundColor: active ? palette.text : 'transparent',
+                            borderColor: active ? palette.text : palette.border,
+                            borderWidth: 1,
+                            marginRight: 8,
+                            marginBottom: 8,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              color: active ? palette.background : palette.textSecondary,
+                              fontSize: FONT_SIZE.sm,
+                              fontWeight: '600',
+                            }}
+                          >
+                            {p.name}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </>
+              )}
+
+              <Input
+                testID="nuevo-animal-notes"
+                label="Notas"
+                value={form.notes}
+                onChangeText={(v) => setForm({ ...form, notes: v })}
+                placeholder="Observaciones…"
+                multiline
+                style={{ height: 88, textAlignVertical: 'top', paddingTop: 10 }}
+                containerStyle={{ marginTop: SPACING.md }}
+              />
+
+              <Button
+                testID="nuevo-animal-submit"
+                label="Guardar animal"
+                variant="accent"
+                size="lg"
+                loading={saving}
+                onPress={handleSubmit}
+                style={{ marginTop: SPACING.lg }}
+              />
+            </Card>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </ScreenBackground>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.lg, paddingVertical: SPACING.sm },
-  backBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-  headerTitle: { fontSize: FONT_SIZE.lg, fontWeight: '700', color: COLORS.text },
-  form: { paddingHorizontal: SPACING.lg },
-  label: { fontSize: FONT_SIZE.sm, fontWeight: '600', color: COLORS.textSecondary, marginTop: SPACING.md, marginBottom: SPACING.xs },
-  input: { backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, height: 48, paddingHorizontal: SPACING.md, fontSize: FONT_SIZE.base, color: COLORS.text },
-  typeRow: { flexDirection: 'row', gap: SPACING.sm },
-  typeBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 12, borderRadius: 10, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border },
-  typeBtnActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  typeBtnText: { fontSize: FONT_SIZE.xs, fontWeight: '600', color: COLORS.textSecondary },
-  sexRow: { flexDirection: 'row', gap: SPACING.sm },
-  sexBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 10, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border },
-  sexBtnActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  sexBtnText: { fontSize: FONT_SIZE.sm, fontWeight: '600', color: COLORS.textSecondary },
-  paddockGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.xs },
-  paddockChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border },
-  paddockChipActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  paddockChipText: { fontSize: FONT_SIZE.sm, color: COLORS.textSecondary },
-  paddockChipTextActive: { color: COLORS.white },
-  submitBtn: { backgroundColor: COLORS.primary, height: 56, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginTop: SPACING.xl },
-  submitBtnText: { fontSize: FONT_SIZE.lg, fontWeight: '700', color: COLORS.white },
-});

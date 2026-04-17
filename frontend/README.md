@@ -1,50 +1,46 @@
-# Welcome to your Expo app 👋
+# AgroFlow Frontend
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Frontend Expo React Native para la operacion diaria de AgroFlow.
 
-## Get started
+## Stack
 
-1. Install dependencies
+- Expo
+- React Native
+- Expo Router
+- Zustand
+- AsyncStorage
 
-   ```bash
-   npm install
-   ```
+## Estructura
 
-2. Start the app
+- `app/`: rutas y pantallas
+- `src/api.ts`: integracion con backend
+- `src/store.ts`: sesion y usuario
+- `src/offline.ts`: cache y sincronizacion offline
+- `src/theme.ts`: tokens visuales
 
-   ```bash
-   npx expo start
-   ```
+## Variable requerida
 
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
+```env
+EXPO_PUBLIC_BACKEND_URL=http://localhost:8000
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## Ejecutar
 
-## Learn more
+```powershell
+npm install
+npx expo start
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+## Funcionalidades actuales
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+- login con Google
+- dashboard operativo
+- gestion de ganado
+- gestion de potreros
+- finanzas
+- alertas por reglas
+- soporte offline basico
 
-## Join the community
+## Nota
 
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+Este frontend debe reflejar el producto actual. No debe comunicar funciones de IA que no existan en el backend.

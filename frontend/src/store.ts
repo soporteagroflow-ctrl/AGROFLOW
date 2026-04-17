@@ -1,6 +1,9 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { auth } from './firebase';
+import { signOut as firebaseSignOut } from 'firebase/auth';
 
+// ─── Auth Store ──────────────────────────────────────────────────────
 interface User {
   user_id: string;
   email: string;
@@ -12,10 +15,8 @@ interface User {
 
 interface AuthState {
   user: User | null;
-  token: string | null;
   isLoading: boolean;
   setUser: (user: User | null) => void;
-  setToken: (token: string | null) => void;
   setLoading: (loading: boolean) => void;
   loadFromStorage: () => Promise<void>;
   signOut: () => Promise<void>;
@@ -23,7 +24,6 @@ interface AuthState {
 
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
-  token: null,
   isLoading: true,
   setUser: (user) => {
     set({ user });
@@ -33,23 +33,12 @@ export const useAuthStore = create<AuthState>((set) => ({
       AsyncStorage.removeItem('user');
     }
   },
-  setToken: (token) => {
-    set({ token });
-    if (token) {
-      AsyncStorage.setItem('session_token', token);
-    } else {
-      AsyncStorage.removeItem('session_token');
-    }
-  },
   setLoading: (isLoading) => set({ isLoading }),
   loadFromStorage: async () => {
     try {
-      const [tokenStr, userStr] = await Promise.all([
-        AsyncStorage.getItem('session_token'),
-        AsyncStorage.getItem('user'),
-      ]);
-      if (tokenStr && userStr) {
-        set({ token: tokenStr, user: JSON.parse(userStr), isLoading: false });
+      const userStr = await AsyncStorage.getItem('user');
+      if (userStr) {
+        set({ user: JSON.parse(userStr), isLoading: false });
       } else {
         set({ isLoading: false });
       }
@@ -58,7 +47,43 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
   signOut: async () => {
-    await AsyncStorage.multiRemove(['session_token', 'user']);
-    set({ user: null, token: null });
+    try {
+      await firebaseSignOut(auth);
+    } catch {
+      // Firebase sign out may fail if no user, that's ok
+    }
+    await AsyncStorage.removeItem('user');
+    set({ user: null });
+  },
+}));
+
+// ─── Toast Store ─────────────────────────────────────────────────────
+export type ToastType = 'success' | 'error' | 'warning' | 'info';
+
+interface Toast {
+  id: string;
+  message: string;
+  type: ToastType;
+}
+
+interface ToastState {
+  toasts: Toast[];
+  show: (message: string, type?: ToastType) => void;
+  dismiss: (id: string) => void;
+}
+
+let _toastId = 0;
+
+export const useToastStore = create<ToastState>((set) => ({
+  toasts: [],
+  show: (message, type = 'info') => {
+    const id = `toast_${++_toastId}`;
+    set((s) => ({ toasts: [...s.toasts, { id, message, type }] }));
+    setTimeout(() => {
+      set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }));
+    }, 3500);
+  },
+  dismiss: (id) => {
+    set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }));
   },
 }));

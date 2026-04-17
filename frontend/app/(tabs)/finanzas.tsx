@@ -1,244 +1,476 @@
 import { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, ActivityIndicator, Modal, TextInput, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import {
+  View,
+  Text,
+  FlatList,
+  Pressable,
+  RefreshControl,
+  ActivityIndicator,
+  Modal,
+  TextInput,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { getFinances, createFinance, getFinanceSummary, deleteFinance } from '../../src/api';
-import { COLORS, SPACING, FONT_SIZE, FINANCE_CATEGORIES } from '../../src/theme';
+
+import {
+  getFinances,
+  createFinance,
+  getFinanceSummary,
+  deleteFinance,
+} from '../../src/api';
+import { useToastStore } from '../../src/store';
+import {
+  FINANCE_CATEGORIES,
+  FONT_SIZE,
+  RADIUS,
+  SPACING,
+} from '../../src/theme';
+import { useTheme } from '../../src/ThemeContext';
+import {
+  Button,
+  Card,
+  EmptyState,
+  Input,
+  MetricCard,
+  Pill,
+  ScreenBackground,
+  Section,
+} from '../../src/ui';
 
 export default function FinanzasScreen() {
+  const { palette } = useTheme();
+  const toast = useToastStore();
   const [finances, setFinances] = useState<any[]>([]);
   const [summary, setSummary] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showModal, setShowModal] = useState(false);
-  const [form, setForm] = useState({ transaction_type: 'gasto', category: 'compra_alimento', amount: '', description: '', date: '' });
+  const [submitting, setSubmitting] = useState(false);
+  const [form, setForm] = useState({
+    transaction_type: 'gasto',
+    category: 'compra_alimento',
+    amount: '',
+    description: '',
+    date: '',
+  });
 
   const fetchData = useCallback(async () => {
     try {
       const [fRes, sRes] = await Promise.all([getFinances(), getFinanceSummary()]);
       setFinances(fRes.data);
       setSummary(sRes.data);
-    } catch (e) { console.log('Error:', e); }
-    finally { setLoading(false); setRefreshing(false); }
+    } catch {
+      toast.show('Error al cargar las finanzas', 'error');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   }, []);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
-  const onRefresh = () => { setRefreshing(true); fetchData(); };
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchData();
+  };
 
   const handleSubmit = async () => {
-    if (!form.amount) return;
+    if (!form.amount || isNaN(Number(form.amount)) || Number(form.amount) <= 0) {
+      toast.show('Ingresa un monto válido mayor a 0', 'warning');
+      return;
+    }
+    if (form.date && !/^\d{4}-\d{2}-\d{2}$/.test(form.date)) {
+      toast.show('Formato de fecha inválido (YYYY-MM-DD)', 'warning');
+      return;
+    }
     try {
+      setSubmitting(true);
       await createFinance({ ...form, amount: parseFloat(form.amount) });
+      toast.show('Registro financiero guardado', 'success');
       setShowModal(false);
-      setForm({ transaction_type: 'gasto', category: 'compra_alimento', amount: '', description: '', date: '' });
-      fetchData();
-    } catch (e) { console.log('Error:', e); }
+      setForm({
+        transaction_type: 'gasto',
+        category: 'compra_alimento',
+        amount: '',
+        description: '',
+        date: '',
+      });
+      await fetchData();
+    } catch {
+      toast.show('Error al guardar el registro', 'error');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleDelete = async (id: string) => {
-    try { await deleteFinance(id); fetchData(); } catch (e) { console.log('Error:', e); }
+    try {
+      await deleteFinance(id);
+      toast.show('Registro eliminado', 'success');
+      await fetchData();
+    } catch {
+      toast.show('Error al eliminar el registro', 'error');
+    }
   };
 
-  const categories = [
-    'venta_ganado', 'venta_leche', 'compra_alimento', 'veterinario', 'mantenimiento', 'personal', 'transporte', 'otros'
-  ];
+  const categories = Object.keys(FINANCE_CATEGORIES);
 
   const renderFinance = ({ item }: { item: any }) => {
     const isIncome = item.transaction_type === 'ingreso';
+    const accent = isIncome ? palette.green : palette.red;
+    const accentSoft = isIncome ? palette.greenSoft : palette.redSoft;
     return (
-      <View testID={`finance-item-${item.finance_id}`} style={styles.financeCard}>
-        <View style={[styles.financeIcon, { backgroundColor: isIncome ? '#4CAF5020' : '#CF667920' }]}>
-          <Ionicons name={isIncome ? 'arrow-up' : 'arrow-down'} size={20} color={isIncome ? '#4CAF50' : '#CF6679'} />
+      <Card
+        style={{ marginBottom: SPACING.sm }}
+        padding={SPACING.md}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <View
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 10,
+              backgroundColor: accentSoft,
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
+          >
+            <Ionicons
+              name={isIncome ? 'arrow-up' : 'arrow-down'}
+              size={18}
+              color={accent}
+            />
+          </View>
+          <View style={{ flex: 1, marginLeft: SPACING.md }}>
+            <Text
+              style={{ color: palette.text, fontSize: FONT_SIZE.sm, fontWeight: '700' }}
+            >
+              {FINANCE_CATEGORIES[item.category] || item.category}
+            </Text>
+            <Text
+              style={{ color: palette.textSecondary, fontSize: FONT_SIZE.xs, marginTop: 2 }}
+            >
+              {item.description || 'Sin descripción'}
+            </Text>
+            <Text style={{ color: palette.textTertiary, fontSize: FONT_SIZE.xs, marginTop: 1 }}>
+              {item.date}
+            </Text>
+          </View>
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text
+              style={{
+                color: accent,
+                fontSize: FONT_SIZE.base,
+                fontWeight: '700',
+              }}
+            >
+              {isIncome ? '+' : '-'}${(item.amount || 0).toLocaleString()}
+            </Text>
+            <Pressable
+              onPress={() => handleDelete(item.finance_id)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              style={{ marginTop: 4 }}
+            >
+              <Ionicons name="trash-outline" size={14} color={palette.textTertiary} />
+            </Pressable>
+          </View>
         </View>
-        <View style={styles.financeInfo}>
-          <Text style={styles.financeCat}>{FINANCE_CATEGORIES[item.category] || item.category}</Text>
-          <Text style={styles.financeDesc}>{item.description || 'Sin descripción'}</Text>
-          <Text style={styles.financeDate}>{item.date}</Text>
-        </View>
-        <View style={styles.financeRight}>
-          <Text style={[styles.financeAmount, { color: isIncome ? '#4CAF50' : '#CF6679' }]}>
-            {isIncome ? '+' : '-'}${(item.amount || 0).toLocaleString()}
-          </Text>
-          <TouchableOpacity onPress={() => handleDelete(item.finance_id)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <Ionicons name="trash-outline" size={16} color={COLORS.muted} />
-          </TouchableOpacity>
-        </View>
-      </View>
+      </Card>
     );
   };
 
   if (loading) {
-    return <SafeAreaView style={styles.container}><View style={styles.centered}><ActivityIndicator size="large" color={COLORS.primary} /></View></SafeAreaView>;
+    return (
+      <ScreenBackground>
+        <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color={palette.accent} />
+        </SafeAreaView>
+      </ScreenBackground>
+    );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Finanzas</Text>
-      </View>
-
-      {/* Summary Cards */}
-      {summary && (
-        <View style={styles.summaryRow}>
-          <View style={[styles.summaryCard, { borderLeftColor: '#4CAF50' }]}>
-            <Text style={styles.summaryLabel}>Ingresos</Text>
-            <Text style={[styles.summaryAmount, { color: '#4CAF50' }]}>${((summary.total_income || 0) / 1000000).toFixed(1)}M</Text>
-          </View>
-          <View style={[styles.summaryCard, { borderLeftColor: '#CF6679' }]}>
-            <Text style={styles.summaryLabel}>Gastos</Text>
-            <Text style={[styles.summaryAmount, { color: '#CF6679' }]}>${((summary.total_expense || 0) / 1000000).toFixed(1)}M</Text>
-          </View>
-          <View style={[styles.summaryCard, { borderLeftColor: '#42A5F5' }]}>
-            <Text style={styles.summaryLabel}>Ganancia</Text>
-            <Text style={[styles.summaryAmount, { color: '#42A5F5' }]}>${((summary.profit || 0) / 1000000).toFixed(1)}M</Text>
+    <ScreenBackground>
+      <SafeAreaView style={{ flex: 1 }}>
+        <View style={{ paddingHorizontal: SPACING.lg, paddingTop: SPACING.lg }}>
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'flex-end',
+              justifyContent: 'space-between',
+            }}
+          >
+            <View style={{ flex: 1 }}>
+              <Text
+                style={{
+                  color: palette.text,
+                  fontSize: FONT_SIZE.xxxl,
+                  fontWeight: '800',
+                  letterSpacing: -0.6,
+                }}
+              >
+                Finanzas
+              </Text>
+              <Text
+                style={{
+                  color: palette.textSecondary,
+                  fontSize: FONT_SIZE.sm,
+                  marginTop: 2,
+                }}
+              >
+                {summary?.transaction_count || 0} transacciones
+              </Text>
+            </View>
+            <Button
+              label="Nuevo"
+              icon={<Ionicons name="add" size={14} color={palette.btnPrimaryFg} />}
+              size="sm"
+              variant="primary"
+              onPress={() => setShowModal(true)}
+            />
           </View>
         </View>
-      )}
 
-      <FlatList
-        data={finances}
-        keyExtractor={item => item.finance_id}
-        renderItem={renderFinance}
-        contentContainerStyle={styles.list}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.primary} />}
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Ionicons name="cash-outline" size={48} color={COLORS.muted} />
-            <Text style={styles.emptyText}>No hay registros financieros</Text>
+        {summary && (
+          <View
+            style={{
+              flexDirection: 'row',
+              paddingHorizontal: SPACING.lg,
+              marginTop: SPACING.md,
+            }}
+          >
+            {[
+              {
+                label: 'Ingresos',
+                value: `$${((summary.total_income || 0) / 1_000_000).toFixed(1)}M`,
+                accent: 'green' as const,
+              },
+              {
+                label: 'Gastos',
+                value: `$${((summary.total_expense || 0) / 1_000_000).toFixed(1)}M`,
+                accent: 'red' as const,
+              },
+              {
+                label: 'Ganancia',
+                value: `$${((summary.profit || 0) / 1_000_000).toFixed(1)}M`,
+                accent: 'accent' as const,
+              },
+            ].map((s, i) => (
+              <View
+                key={s.label}
+                style={{ flex: 1, marginRight: i < 2 ? SPACING.sm : 0 }}
+              >
+                <MetricCard label={s.label} value={s.value} accent={s.accent} />
+              </View>
+            ))}
           </View>
-        }
-      />
+        )}
 
-      <TouchableOpacity testID="finanzas-add-btn" style={styles.fab} onPress={() => setShowModal(true)} activeOpacity={0.8}>
-        <Ionicons name="add" size={28} color={COLORS.white} />
-      </TouchableOpacity>
+        <FlatList
+          data={finances}
+          keyExtractor={(item) => item.finance_id}
+          renderItem={renderFinance}
+          contentContainerStyle={{
+            paddingHorizontal: SPACING.lg,
+            paddingTop: SPACING.xl,
+            paddingBottom: 100,
+          }}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={palette.accent}
+            />
+          }
+          ListEmptyComponent={
+            <EmptyState
+              icon={<Ionicons name="cash-outline" size={28} color={palette.textTertiary} />}
+              title="Sin registros"
+              subtitle="Agrega tu primer ingreso o gasto para ver el resumen."
+            />
+          }
+        />
 
-      {/* Add Finance Modal */}
-      <Modal visible={showModal} animationType="slide" transparent>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Nuevo Registro</Text>
-              <TouchableOpacity onPress={() => setShowModal(false)}>
-                <Ionicons name="close" size={24} color={COLORS.text} />
-              </TouchableOpacity>
+        <Modal visible={showModal} animationType="slide" transparent>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}
+          >
+            <View
+              style={{
+                backgroundColor: palette.background,
+                borderTopLeftRadius: 24,
+                borderTopRightRadius: 24,
+                padding: SPACING.lg,
+                maxHeight: '88%',
+                borderTopWidth: 1,
+                borderColor: palette.border,
+              }}
+            >
+              <View
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: SPACING.md,
+                }}
+              >
+                <Text
+                  style={{
+                    color: palette.text,
+                    fontSize: FONT_SIZE.xl,
+                    fontWeight: '800',
+                    letterSpacing: -0.2,
+                  }}
+                >
+                  Nuevo registro
+                </Text>
+                <Pressable onPress={() => setShowModal(false)}>
+                  <Ionicons name="close" size={22} color={palette.text} />
+                </Pressable>
+              </View>
+              <ScrollView showsVerticalScrollIndicator={false}>
+                <Text
+                  style={{
+                    color: palette.textSecondary,
+                    fontSize: FONT_SIZE.sm,
+                    fontWeight: '600',
+                    marginBottom: 6,
+                  }}
+                >
+                  Tipo
+                </Text>
+                <View style={{ flexDirection: 'row' }}>
+                  {[
+                    { key: 'ingreso', label: 'Ingreso', accent: palette.green },
+                    { key: 'gasto', label: 'Gasto', accent: palette.red },
+                  ].map((t) => {
+                    const active = form.transaction_type === t.key;
+                    return (
+                      <Pressable
+                        key={t.key}
+                        testID={`finance-type-${t.key}`}
+                        onPress={() => setForm({ ...form, transaction_type: t.key })}
+                        style={{
+                          flex: 1,
+                          paddingVertical: 12,
+                          borderRadius: RADIUS.md,
+                          backgroundColor: active ? t.accent : palette.surface,
+                          borderColor: active ? t.accent : palette.border,
+                          borderWidth: 1,
+                          marginRight: t.key === 'ingreso' ? SPACING.sm : 0,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <Ionicons
+                          name={t.key === 'ingreso' ? 'arrow-up' : 'arrow-down'}
+                          size={16}
+                          color={active ? '#FFFFFF' : t.accent}
+                        />
+                        <Text
+                          style={{
+                            color: active ? '#FFFFFF' : palette.text,
+                            fontSize: FONT_SIZE.sm,
+                            fontWeight: '700',
+                            marginLeft: 6,
+                          }}
+                        >
+                          {t.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+
+                <Text
+                  style={{
+                    color: palette.textSecondary,
+                    fontSize: FONT_SIZE.sm,
+                    fontWeight: '600',
+                    marginTop: SPACING.md,
+                    marginBottom: 6,
+                  }}
+                >
+                  Categoría
+                </Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                  {categories.map((cat) => {
+                    const active = form.category === cat;
+                    return (
+                      <Pressable
+                        key={cat}
+                        onPress={() => setForm({ ...form, category: cat })}
+                        style={{
+                          paddingHorizontal: 12,
+                          paddingVertical: 6,
+                          borderRadius: RADIUS.pill,
+                          backgroundColor: active ? palette.text : 'transparent',
+                          borderColor: active ? palette.text : palette.border,
+                          borderWidth: 1,
+                          marginRight: 6,
+                          marginBottom: 6,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: active ? palette.background : palette.textSecondary,
+                            fontSize: FONT_SIZE.xs,
+                            fontWeight: '600',
+                          }}
+                        >
+                          {FINANCE_CATEGORIES[cat]}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+
+                <View style={{ marginTop: SPACING.md }}>
+                  <Input
+                    label="Monto ($)"
+                    testID="finance-amount-input"
+                    value={form.amount}
+                    onChangeText={(v) => setForm({ ...form, amount: v })}
+                    keyboardType="numeric"
+                    placeholder="0"
+                  />
+                  <Input
+                    label="Descripción"
+                    testID="finance-desc-input"
+                    value={form.description}
+                    onChangeText={(v) => setForm({ ...form, description: v })}
+                    placeholder="Descripción del registro"
+                  />
+                  <Input
+                    label="Fecha (YYYY-MM-DD)"
+                    testID="finance-date-input"
+                    value={form.date}
+                    onChangeText={(v) => setForm({ ...form, date: v })}
+                    placeholder="2026-01-15"
+                  />
+                </View>
+
+                <Button
+                  testID="finance-submit-btn"
+                  label="Guardar registro"
+                  variant="accent"
+                  size="lg"
+                  loading={submitting}
+                  onPress={handleSubmit}
+                  style={{ marginTop: SPACING.lg, marginBottom: SPACING.xl }}
+                />
+              </ScrollView>
             </View>
-            <ScrollView showsVerticalScrollIndicator={false}>
-              {/* Type Selector */}
-              <Text style={styles.label}>Tipo</Text>
-              <View style={styles.typeRow}>
-                <TouchableOpacity
-                  testID="finance-type-ingreso"
-                  style={[styles.typeBtn, form.transaction_type === 'ingreso' && styles.typeBtnActive]}
-                  onPress={() => setForm({ ...form, transaction_type: 'ingreso' })}
-                >
-                  <Ionicons name="arrow-up" size={18} color={form.transaction_type === 'ingreso' ? COLORS.white : '#4CAF50'} />
-                  <Text style={[styles.typeBtnText, form.transaction_type === 'ingreso' && { color: COLORS.white }]}>Ingreso</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  testID="finance-type-gasto"
-                  style={[styles.typeBtn, form.transaction_type === 'gasto' && styles.typeBtnActiveRed]}
-                  onPress={() => setForm({ ...form, transaction_type: 'gasto' })}
-                >
-                  <Ionicons name="arrow-down" size={18} color={form.transaction_type === 'gasto' ? COLORS.white : '#CF6679'} />
-                  <Text style={[styles.typeBtnText, form.transaction_type === 'gasto' && { color: COLORS.white }]}>Gasto</Text>
-                </TouchableOpacity>
-              </View>
-
-              <Text style={styles.label}>Categoría</Text>
-              <View style={styles.catGrid}>
-                {categories.map(cat => (
-                  <TouchableOpacity
-                    key={cat}
-                    style={[styles.catChip, form.category === cat && styles.catChipActive]}
-                    onPress={() => setForm({ ...form, category: cat })}
-                  >
-                    <Text style={[styles.catChipText, form.category === cat && styles.catChipTextActive]}>
-                      {FINANCE_CATEGORIES[cat]}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              <Text style={styles.label}>Monto ($)</Text>
-              <TextInput
-                testID="finance-amount-input"
-                style={styles.input}
-                value={form.amount}
-                onChangeText={v => setForm({ ...form, amount: v })}
-                keyboardType="numeric"
-                placeholder="0"
-                placeholderTextColor={COLORS.muted}
-              />
-
-              <Text style={styles.label}>Descripción</Text>
-              <TextInput
-                testID="finance-desc-input"
-                style={styles.input}
-                value={form.description}
-                onChangeText={v => setForm({ ...form, description: v })}
-                placeholder="Descripción del registro"
-                placeholderTextColor={COLORS.muted}
-              />
-
-              <Text style={styles.label}>Fecha (YYYY-MM-DD)</Text>
-              <TextInput
-                testID="finance-date-input"
-                style={styles.input}
-                value={form.date}
-                onChangeText={v => setForm({ ...form, date: v })}
-                placeholder="2025-01-15"
-                placeholderTextColor={COLORS.muted}
-              />
-
-              <TouchableOpacity testID="finance-submit-btn" style={styles.submitBtn} onPress={handleSubmit}>
-                <Text style={styles.submitBtnText}>Guardar Registro</Text>
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
-    </SafeAreaView>
+          </KeyboardAvoidingView>
+        </Modal>
+      </SafeAreaView>
+    </ScreenBackground>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  header: { paddingHorizontal: SPACING.lg, paddingTop: SPACING.md },
-  title: { fontSize: FONT_SIZE.xxl, fontWeight: '700', color: COLORS.text },
-  summaryRow: { flexDirection: 'row', paddingHorizontal: SPACING.lg, marginTop: SPACING.md, gap: SPACING.sm },
-  summaryCard: { flex: 1, backgroundColor: COLORS.surface, borderRadius: 12, padding: SPACING.md, borderLeftWidth: 3, borderWidth: 1, borderColor: COLORS.border },
-  summaryLabel: { fontSize: FONT_SIZE.xs, color: COLORS.textSecondary },
-  summaryAmount: { fontSize: FONT_SIZE.lg, fontWeight: '800', marginTop: 4 },
-  list: { paddingHorizontal: SPACING.lg, paddingTop: SPACING.sm, paddingBottom: 100 },
-  financeCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.surface, borderRadius: 12, padding: SPACING.md, marginTop: SPACING.sm, borderWidth: 1, borderColor: COLORS.border },
-  financeIcon: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
-  financeInfo: { flex: 1, marginLeft: SPACING.sm },
-  financeCat: { fontSize: FONT_SIZE.sm, fontWeight: '700', color: COLORS.text },
-  financeDesc: { fontSize: FONT_SIZE.xs, color: COLORS.textSecondary, marginTop: 1 },
-  financeDate: { fontSize: FONT_SIZE.xs, color: COLORS.muted, marginTop: 1 },
-  financeRight: { alignItems: 'flex-end', gap: 6 },
-  financeAmount: { fontSize: FONT_SIZE.base, fontWeight: '700' },
-  emptyState: { alignItems: 'center', paddingTop: 60, gap: SPACING.md },
-  emptyText: { fontSize: FONT_SIZE.base, color: COLORS.muted },
-  fab: { position: 'absolute', bottom: 24, right: 24, width: 56, height: 56, borderRadius: 28, backgroundColor: COLORS.secondary, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 8 },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: COLORS.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: SPACING.lg, maxHeight: '85%' },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SPACING.lg },
-  modalTitle: { fontSize: FONT_SIZE.xl, fontWeight: '700', color: COLORS.text },
-  label: { fontSize: FONT_SIZE.sm, fontWeight: '600', color: COLORS.textSecondary, marginTop: SPACING.md, marginBottom: SPACING.xs },
-  typeRow: { flexDirection: 'row', gap: SPACING.sm },
-  typeBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 10, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border },
-  typeBtnActive: { backgroundColor: '#4CAF50', borderColor: '#4CAF50' },
-  typeBtnActiveRed: { backgroundColor: '#CF6679', borderColor: '#CF6679' },
-  typeBtnText: { fontSize: FONT_SIZE.sm, fontWeight: '600', color: COLORS.text },
-  catGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.xs },
-  catChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border },
-  catChipActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  catChipText: { fontSize: FONT_SIZE.xs, color: COLORS.textSecondary },
-  catChipTextActive: { color: COLORS.white },
-  input: { backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, height: 48, paddingHorizontal: SPACING.md, fontSize: FONT_SIZE.base, color: COLORS.text },
-  submitBtn: { backgroundColor: COLORS.primary, height: 52, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginTop: SPACING.lg, marginBottom: SPACING.xl },
-  submitBtnText: { fontSize: FONT_SIZE.lg, fontWeight: '700', color: COLORS.white },
-});

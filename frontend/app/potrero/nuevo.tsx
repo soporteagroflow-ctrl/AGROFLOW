@@ -1,17 +1,49 @@
 import { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
+import {
+  View,
+  Text,
+  ScrollView,
+  Pressable,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+
 import { createPaddock } from '../../src/api';
-import { COLORS, SPACING, FONT_SIZE } from '../../src/theme';
+import { AccentKey, FONT_SIZE, RADIUS, SPACING } from '../../src/theme';
+import { useTheme } from '../../src/ThemeContext';
+import { Button, Card, Input, ScreenBackground } from '../../src/ui';
+
+const GRASS_OPTIONS: { key: string; label: string; accent: AccentKey }[] = [
+  { key: 'bueno', label: 'Bueno', accent: 'green' },
+  { key: 'regular', label: 'Regular', accent: 'orange' },
+  { key: 'malo', label: 'Malo', accent: 'red' },
+];
+
+const STATUS_OPTIONS: { key: string; label: string; accent: AccentKey }[] = [
+  { key: 'activo', label: 'Activo', accent: 'green' },
+  { key: 'en_descanso', label: 'En descanso', accent: 'orange' },
+  { key: 'mantenimiento', label: 'Mantenimiento', accent: 'accent' },
+];
+
+const GRASS_TYPES = ['Brachiaria', 'Estrella', 'Guinea', 'Kikuyo', 'Pangola', 'Otro'];
 
 export default function NuevoPotrero() {
   const router = useRouter();
+  const { palette } = useTheme();
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
-    name: '', area_hectares: '', grass_type: '', grass_status: 'bueno',
-    capacity: '', center_lat: '', center_lng: '', status: 'activo', notes: '',
+    name: '',
+    area_hectares: '',
+    grass_type: '',
+    grass_status: 'bueno',
+    capacity: '',
+    center_lat: '',
+    center_lng: '',
+    status: 'activo',
+    notes: '',
   });
 
   const handleSubmit = async () => {
@@ -21,128 +53,297 @@ export default function NuevoPotrero() {
       await createPaddock({
         ...form,
         area_hectares: form.area_hectares ? parseFloat(form.area_hectares) : 0,
-        capacity: form.capacity ? parseInt(form.capacity) : 0,
+        capacity: form.capacity ? parseInt(form.capacity, 10) : 0,
         center_lat: form.center_lat ? parseFloat(form.center_lat) : 4.609,
         center_lng: form.center_lng ? parseFloat(form.center_lng) : -74.082,
         coordinates: [],
       });
       router.back();
-    } catch (e) { console.log('Error:', e); }
-    finally { setSaving(false); }
+    } catch {
+      /* ignore */
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const grassOptions = [
-    { key: 'bueno', label: 'Bueno', color: '#4CAF50' },
-    { key: 'regular', label: 'Regular', color: '#FFA726' },
-    { key: 'malo', label: 'Malo', color: '#CF6679' },
-  ];
-
-  const statusOptions = [
-    { key: 'activo', label: 'Activo', color: '#4CAF50' },
-    { key: 'en_descanso', label: 'En Descanso', color: '#FFA726' },
-    { key: 'mantenimiento', label: 'Mantenimiento', color: '#42A5F5' },
-  ];
-
-  const grassTypes = ['Brachiaria', 'Estrella', 'Guinea', 'Kikuyo', 'Pangola', 'Otro'];
-
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity testID="nuevo-potrero-back" onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color={COLORS.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Nuevo Potrero</Text>
-        <View style={{ width: 40 }} />
-      </View>
+    <ScreenBackground>
+      <SafeAreaView style={{ flex: 1 }}>
+        {/* Header */}
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            paddingHorizontal: SPACING.lg,
+            paddingTop: SPACING.md,
+            paddingBottom: SPACING.sm,
+          }}
+        >
+          <Pressable
+            testID="nuevo-potrero-back"
+            onPress={() => router.back()}
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: RADIUS.pill,
+              borderWidth: 1,
+              borderColor: palette.border,
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
+          >
+            <Ionicons name="arrow-back" size={18} color={palette.text} />
+          </Pressable>
+          <Text
+            style={{
+              color: palette.text,
+              fontSize: FONT_SIZE.lg,
+              fontWeight: '800',
+              letterSpacing: -0.2,
+            }}
+          >
+            Nuevo potrero
+          </Text>
+          <View style={{ width: 36 }} />
+        </View>
 
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.form}>
-          <Text style={styles.label}>Nombre *</Text>
-          <TextInput testID="nuevo-potrero-name" style={styles.input} value={form.name} onChangeText={v => setForm({ ...form, name: v })} placeholder="Potrero Norte" placeholderTextColor={COLORS.muted} />
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={{ flex: 1 }}
+        >
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingHorizontal: SPACING.lg, paddingBottom: 40 }}
+          >
+            <Card padding={SPACING.md} style={{ marginTop: SPACING.md }}>
+              <Input
+                testID="nuevo-potrero-name"
+                label="Nombre *"
+                value={form.name}
+                onChangeText={(v) => setForm({ ...form, name: v })}
+                placeholder="Potrero Norte"
+              />
+              <Input
+                testID="nuevo-potrero-area"
+                label="Área (hectáreas)"
+                value={form.area_hectares}
+                onChangeText={(v) => setForm({ ...form, area_hectares: v })}
+                keyboardType="numeric"
+                placeholder="15"
+              />
 
-          <Text style={styles.label}>Área (hectáreas)</Text>
-          <TextInput testID="nuevo-potrero-area" style={styles.input} value={form.area_hectares} onChangeText={v => setForm({ ...form, area_hectares: v })} keyboardType="numeric" placeholder="15" placeholderTextColor={COLORS.muted} />
-
-          <Text style={styles.label}>Tipo de Pasto</Text>
-          <View style={styles.chipGrid}>
-            {grassTypes.map(g => (
-              <TouchableOpacity
-                key={g}
-                style={[styles.chip, form.grass_type === g && styles.chipActive]}
-                onPress={() => setForm({ ...form, grass_type: g })}
+              <Text
+                style={{
+                  color: palette.textSecondary,
+                  fontSize: FONT_SIZE.sm,
+                  fontWeight: '600',
+                  marginTop: SPACING.md,
+                  marginBottom: 6,
+                }}
               >
-                <Text style={[styles.chipText, form.grass_type === g && styles.chipTextActive]}>{g}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+                Tipo de pasto
+              </Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                {GRASS_TYPES.map((g) => {
+                  const active = form.grass_type === g;
+                  return (
+                    <Pressable
+                      key={g}
+                      onPress={() => setForm({ ...form, grass_type: g })}
+                      style={{
+                        paddingHorizontal: 14,
+                        paddingVertical: 8,
+                        borderRadius: RADIUS.pill,
+                        backgroundColor: active ? palette.text : 'transparent',
+                        borderColor: active ? palette.text : palette.border,
+                        borderWidth: 1,
+                        marginRight: 8,
+                        marginBottom: 8,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: active ? palette.background : palette.textSecondary,
+                          fontSize: FONT_SIZE.sm,
+                          fontWeight: '600',
+                        }}
+                      >
+                        {g}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
 
-          <Text style={styles.label}>Estado del Pasto</Text>
-          <View style={styles.statusRow}>
-            {grassOptions.map(g => (
-              <TouchableOpacity
-                key={g.key}
-                style={[styles.statusBtn, form.grass_status === g.key && { backgroundColor: g.color + '20', borderColor: g.color }]}
-                onPress={() => setForm({ ...form, grass_status: g.key })}
+              <Text
+                style={{
+                  color: palette.textSecondary,
+                  fontSize: FONT_SIZE.sm,
+                  fontWeight: '600',
+                  marginTop: SPACING.md,
+                  marginBottom: 6,
+                }}
               >
-                <View style={[styles.dot, { backgroundColor: g.color }]} />
-                <Text style={[styles.statusBtnText, form.grass_status === g.key && { color: g.color }]}>{g.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+                Estado del pasto
+              </Text>
+              <View style={{ flexDirection: 'row' }}>
+                {GRASS_OPTIONS.map((g, i) => {
+                  const active = form.grass_status === g.key;
+                  const soft = palette[`${g.accent}Soft` as keyof typeof palette] as string;
+                  return (
+                    <Pressable
+                      key={g.key}
+                      onPress={() => setForm({ ...form, grass_status: g.key })}
+                      style={{
+                        flex: 1,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        paddingVertical: 10,
+                        borderRadius: RADIUS.md,
+                        backgroundColor: active ? soft : palette.surface,
+                        borderColor: active ? palette[g.accent] : palette.border,
+                        borderWidth: 1,
+                        marginRight: i < GRASS_OPTIONS.length - 1 ? SPACING.sm : 0,
+                      }}
+                    >
+                      <View
+                        style={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: 4,
+                          backgroundColor: palette[g.accent],
+                          marginRight: 6,
+                        }}
+                      />
+                      <Text
+                        style={{
+                          color: active ? palette[g.accent] : palette.text,
+                          fontSize: FONT_SIZE.sm,
+                          fontWeight: '700',
+                        }}
+                      >
+                        {g.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
 
-          <Text style={styles.label}>Estado del Potrero</Text>
-          <View style={styles.statusRow}>
-            {statusOptions.map(s => (
-              <TouchableOpacity
-                key={s.key}
-                style={[styles.statusBtn, form.status === s.key && { backgroundColor: s.color + '20', borderColor: s.color }]}
-                onPress={() => setForm({ ...form, status: s.key })}
+              <Text
+                style={{
+                  color: palette.textSecondary,
+                  fontSize: FONT_SIZE.sm,
+                  fontWeight: '600',
+                  marginTop: SPACING.md,
+                  marginBottom: 6,
+                }}
               >
-                <Text style={[styles.statusBtnText, form.status === s.key && { color: s.color }]}>{s.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+                Estado del potrero
+              </Text>
+              <View style={{ flexDirection: 'row' }}>
+                {STATUS_OPTIONS.map((s, i) => {
+                  const active = form.status === s.key;
+                  const soft = palette[`${s.accent}Soft` as keyof typeof palette] as string;
+                  return (
+                    <Pressable
+                      key={s.key}
+                      onPress={() => setForm({ ...form, status: s.key })}
+                      style={{
+                        flex: 1,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        paddingVertical: 10,
+                        borderRadius: RADIUS.md,
+                        backgroundColor: active ? soft : palette.surface,
+                        borderColor: active ? palette[s.accent] : palette.border,
+                        borderWidth: 1,
+                        marginRight: i < STATUS_OPTIONS.length - 1 ? SPACING.sm : 0,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: active ? palette[s.accent] : palette.text,
+                          fontSize: FONT_SIZE.xs,
+                          fontWeight: '700',
+                        }}
+                      >
+                        {s.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
 
-          <Text style={styles.label}>Capacidad (animales)</Text>
-          <TextInput testID="nuevo-potrero-capacity" style={styles.input} value={form.capacity} onChangeText={v => setForm({ ...form, capacity: v })} keyboardType="numeric" placeholder="20" placeholderTextColor={COLORS.muted} />
+              <Input
+                testID="nuevo-potrero-capacity"
+                label="Capacidad (animales)"
+                value={form.capacity}
+                onChangeText={(v) => setForm({ ...form, capacity: v })}
+                keyboardType="numeric"
+                placeholder="20"
+                containerStyle={{ marginTop: SPACING.md }}
+              />
 
-          <Text style={styles.label}>Coordenadas GPS</Text>
-          <View style={styles.coordRow}>
-            <TextInput testID="nuevo-potrero-lat" style={[styles.input, { flex: 1 }]} value={form.center_lat} onChangeText={v => setForm({ ...form, center_lat: v })} keyboardType="numeric" placeholder="Latitud (4.609)" placeholderTextColor={COLORS.muted} />
-            <TextInput testID="nuevo-potrero-lng" style={[styles.input, { flex: 1 }]} value={form.center_lng} onChangeText={v => setForm({ ...form, center_lng: v })} keyboardType="numeric" placeholder="Longitud (-74.082)" placeholderTextColor={COLORS.muted} />
-          </View>
+              <Text
+                style={{
+                  color: palette.textSecondary,
+                  fontSize: FONT_SIZE.sm,
+                  fontWeight: '600',
+                  marginTop: SPACING.md,
+                  marginBottom: 6,
+                }}
+              >
+                Coordenadas GPS
+              </Text>
+              <View style={{ flexDirection: 'row' }}>
+                <View style={{ flex: 1, marginRight: SPACING.sm }}>
+                  <Input
+                    testID="nuevo-potrero-lat"
+                    value={form.center_lat}
+                    onChangeText={(v) => setForm({ ...form, center_lat: v })}
+                    keyboardType="numeric"
+                    placeholder="Lat 4.609"
+                    containerStyle={{ marginBottom: 0 }}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Input
+                    testID="nuevo-potrero-lng"
+                    value={form.center_lng}
+                    onChangeText={(v) => setForm({ ...form, center_lng: v })}
+                    keyboardType="numeric"
+                    placeholder="Lng -74.082"
+                    containerStyle={{ marginBottom: 0 }}
+                  />
+                </View>
+              </View>
 
-          <Text style={styles.label}>Notas</Text>
-          <TextInput testID="nuevo-potrero-notes" style={[styles.input, { height: 80, textAlignVertical: 'top', paddingTop: 12 }]} value={form.notes} onChangeText={v => setForm({ ...form, notes: v })} placeholder="Observaciones..." placeholderTextColor={COLORS.muted} multiline />
+              <Input
+                testID="nuevo-potrero-notes"
+                label="Notas"
+                value={form.notes}
+                onChangeText={(v) => setForm({ ...form, notes: v })}
+                placeholder="Observaciones…"
+                multiline
+                style={{ height: 88, textAlignVertical: 'top', paddingTop: 10 }}
+                containerStyle={{ marginTop: SPACING.md }}
+              />
 
-          <TouchableOpacity testID="nuevo-potrero-submit" style={styles.submitBtn} onPress={handleSubmit} disabled={saving}>
-            {saving ? <ActivityIndicator color={COLORS.white} /> : <Text style={styles.submitBtnText}>Guardar Potrero</Text>}
-          </TouchableOpacity>
-          <View style={{ height: 40 }} />
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+              <Button
+                testID="nuevo-potrero-submit"
+                label="Guardar potrero"
+                variant="accent"
+                size="lg"
+                loading={saving}
+                onPress={handleSubmit}
+                style={{ marginTop: SPACING.lg }}
+              />
+            </Card>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </ScreenBackground>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.lg, paddingVertical: SPACING.sm },
-  backBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-  headerTitle: { fontSize: FONT_SIZE.lg, fontWeight: '700', color: COLORS.text },
-  form: { paddingHorizontal: SPACING.lg },
-  label: { fontSize: FONT_SIZE.sm, fontWeight: '600', color: COLORS.textSecondary, marginTop: SPACING.md, marginBottom: SPACING.xs },
-  input: { backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, height: 48, paddingHorizontal: SPACING.md, fontSize: FONT_SIZE.base, color: COLORS.text },
-  chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.xs },
-  chip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border },
-  chipActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  chipText: { fontSize: FONT_SIZE.sm, color: COLORS.textSecondary },
-  chipTextActive: { color: COLORS.white },
-  statusRow: { flexDirection: 'row', gap: SPACING.sm },
-  statusBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 10, borderRadius: 10, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border },
-  statusBtnText: { fontSize: FONT_SIZE.xs, fontWeight: '600', color: COLORS.textSecondary },
-  dot: { width: 8, height: 8, borderRadius: 4 },
-  coordRow: { flexDirection: 'row', gap: SPACING.sm },
-  submitBtn: { backgroundColor: COLORS.primary, height: 56, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginTop: SPACING.xl },
-  submitBtnText: { fontSize: FONT_SIZE.lg, fontWeight: '700', color: COLORS.white },
-});

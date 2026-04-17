@@ -1,5 +1,5 @@
 import axios from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { auth } from './firebase';
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
@@ -10,9 +10,10 @@ const api = axios.create({
 });
 
 api.interceptors.request.use(async (config) => {
-  const token = await AsyncStorage.getItem('session_token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+  const user = auth.currentUser;
+  if (user) {
+    const idToken = await user.getIdToken();
+    config.headers.Authorization = `Bearer ${idToken}`;
   }
   return config;
 });
@@ -21,16 +22,24 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     if (error.response?.status === 401) {
-      await AsyncStorage.removeItem('session_token');
-      await AsyncStorage.removeItem('user');
+      // Token may have expired, try to refresh
+      const user = auth.currentUser;
+      if (user) {
+        try {
+          await user.getIdToken(true); // force refresh
+        } catch {
+          // If refresh fails, sign out
+          await auth.signOut();
+        }
+      }
     }
     return Promise.reject(error);
   }
 );
 
 // Auth
-export const exchangeSession = (sessionId: string) =>
-  api.post('/auth/session', { session_id: sessionId });
+export const firebaseLogin = (idToken: string) =>
+  api.post('/auth/firebase', { id_token: idToken });
 export const getMe = () => api.get('/auth/me');
 export const logout = () => api.post('/auth/logout');
 export const updateProfile = (data: { farm_name?: string; role?: string }) =>
